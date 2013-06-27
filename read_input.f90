@@ -42,6 +42,7 @@ SUBROUTINE read_input()
   use_OA_kernels=.FALSE.
   use_vector_loops=.FALSE.
   use_TeaLeaf=.FALSE.
+  use_trilinos_kernels=.FALSE.
   max_iters = 1000
   eps = 10e-8
   use_Hydro = .TRUE.
@@ -143,6 +144,8 @@ SUBROUTINE read_input()
         use_vector_loops=.TRUE.
       CASE('use_tea_leaf')
         use_Tealeaf=.TRUE.
+      CASE('use_trilinos_kernels')
+        use_trilinos_kernels=.TRUE.
       CASE('tl_max_iters')
         max_iters = parse_getival(parse_getword(.TRUE.))
       CASE('tl_eps')

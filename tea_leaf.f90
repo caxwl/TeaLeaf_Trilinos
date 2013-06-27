@@ -72,6 +72,8 @@ SUBROUTINE tea_leaf()
       rx = dt/(chunks(c)%field%celldx(chunks(c)%field%x_min)**2);
       ry = dt/(chunks(c)%field%celldy(chunks(c)%field%y_min)**2);
 
+      IF(.NOT. use_trilinos_kernels) THEN
+
       DO n=1,max_iters
 
         IF(use_fortran_kernels) THEN
@@ -110,12 +112,26 @@ SUBROUTINE tea_leaf()
         CALL clover_max(error)
 
         IF (error .LT. eps) EXIT
-
-      ENDDO
-
-      PRINT *, 'ERR: ', error
-      PRINT *, 'ITER: ', (n-1)
-
+        ENDDO
+      ELSEIF(use_trilinos_kernels) THEN
+        CALL trilinos_solve(                                   &
+              grid%x_cells, &
+              grid%y_cells, &
+              chunks(c)%field%left,                            &
+              chunks(c)%field%right,                           &
+              chunks(c)%field%bottom,                          &
+              chunks(c)%field%top,                             &
+              1,                                               &
+              grid%x_cells,                                    &
+              1,                                               &
+              grid%y_cells,                                    &
+              rx,                                              &
+              ry,                                              &
+              chunks(c)%field%work_array6,                     &
+              chunks(c)%field%work_array7,                     &
+              chunks(c)%field%u)
+      ENDIF
+     
       ! RESET
       IF(use_fortran_kernels) THEN
           CALL tea_leaf_kernel_finalise(chunks(c)%field%x_min, &

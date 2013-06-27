@@ -66,6 +66,21 @@ SUBROUTINE start
 
   CALL clover_barrier
 
+  IF(use_TeaLeaf .AND. use_trilinos_kernels)THEN
+    DO c=1,number_of_chunks
+      IF(chunks(c)%task .EQ. parallel%task)THEN
+          CALL setup_trilinos( &
+              grid%x_cells, &
+              grid%y_cells, &
+              chunks(c)%field%x_max, &
+              chunks(c)%field%y_max, &
+              chunks(c)%field%left, &
+              chunks(c)%field%right,              &
+              chunks(c)%field%bottom,             &
+              chunks(c)%field%top)
+      ENDIF
+    ENDDO
+  ENDIF
   DO c=1,number_of_chunks
     IF(chunks(c)%task.EQ.parallel%task)THEN
       CALL clover_allocate_buffers(c)
