@@ -105,7 +105,7 @@ MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 CXX_MPI_COMPILER=mpic++
 
-clover_leaf: trilinos-stem c_lover *.f90 Makefile
+tea_leaf: trilinos-stem c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
 		$(TRILINOS_LIBRARY_DIRS) \
 		-lstdc++ \
@@ -168,7 +168,7 @@ clover_leaf: trilinos-stem c_lover *.f90 Makefile
 		tea_leaf_kernel_c.o             \
 		TrilinosStem.o                  \
 		$(TRILINOS_LIBRARIES) \
-		-o clover_leaf; echo $(MESSAGE)
+		-o tea_leaf; echo $(MESSAGE)
 
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
@@ -188,4 +188,4 @@ trilinos-stem: *.C
 
 
 clean:
-	rm -f *.o *.mod *genmod* clover_leaf
+	rm -f *.o *.mod *genmod* tea_leaf
