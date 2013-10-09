@@ -1,22 +1,22 @@
 #include "TrilinosStem.h"
 
 #include "BelosSolverFactory.hpp"
-#include "Epetra_MpiComm.h"
+#include <BelosTpetraAdapter.hpp>
 
 #include "Teuchos_ParameterList.hpp"
 
 #define ARRAY2D(i,j,imin,jmin,ni) (i-(imin))+(((j)-(jmin))*(ni))
 
-Teuchos::RCP<Epetra_Map> TrilinosStem::map;
-Teuchos::RCP<Epetra_CrsMatrix> TrilinosStem::A;
-Teuchos::RCP<Epetra_Vector> TrilinosStem::b;
-Teuchos::RCP<Epetra_Vector> TrilinosStem::x;
+Teuchos::RCP<const TrilinosStem::Map> TrilinosStem::map;
+Teuchos::RCP<TrilinosStem::Matrix> TrilinosStem::A;
+Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::b;
+Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::x;
 int* TrilinosStem::myGlobalIndices_;
 int TrilinosStem::numLocalElements_;
 
 
-Teuchos::RCP<Belos::LinearProblem<double, Epetra_MultiVector, Epetra_Operator> > TrilinosStem::problem;
-Teuchos::RCP<Belos::SolverManager<double, Epetra_MultiVector, Epetra_Operator> > TrilinosStem::solver;
+Teuchos::RCP<Belos::LinearProblem<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::problem;
+Teuchos::RCP<Belos::SolverManager<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::solver;
 
 extern "C" {
     void setup_trilinos_(
@@ -83,11 +83,13 @@ void TrilinosStem::initialise(
         int local_ymin,
         int local_ymax)
 {
-    std::cout << "[STEM]: Setting up Trilinos/Epetra...";
+    std::cout << "[STEM]: Setting up Trilinos/Tpetra...";
 
-    Epetra_MpiComm comm(MPI_COMM_WORLD);
+    Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
+    Teuchos::RCP<const Teuchos::Comm<int> > comm = platform.getComm();
+    Teuchos::RCP<Node> node = platform.getNode();
 
-    long long numGlobalElements = nx * ny;
+    int numGlobalElements = nx * ny;
     numLocalElements_ = localNx * localNy;
     int rowSpacing = nx - localNx;
 
@@ -108,17 +110,18 @@ void TrilinosStem::initialise(
     }
 
     std::cerr << "\t[STEM]: creating map...";
-    map = Teuchos::rcp(new Epetra_Map(numGlobalElements, numLocalElements_, myGlobalIndices_, 1, comm));
+    Teuchos::ArrayView<const Ordinal> localElementList = Teuchos::ArrayView<const Ordinal>(myGlobalIndices_, numLocalElements_);
+    map = Teuchos::rcp(new Map(numGlobalElements, localElementList, 1, comm, node));
     std::cerr << " DONE. " << std::endl;
 
 
-    int* numNonZero = new int[numLocalElements_];
+    size_t* numNonZero = new size_t[numLocalElements_];
 
     i = 0;
     
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            int nnz = 1;
+            size_t nnz = 1;
 
             if(1 != k)
                 nnz++;
@@ -135,22 +138,23 @@ void TrilinosStem::initialise(
     }
 
     std::cerr << "\t[STEM]: creating CrsMatrix...";
-    A = Teuchos::rcp(new Epetra_CrsMatrix(Copy, *map, numNonZero));
+    Teuchos::ArrayRCP<const size_t> nnz = Teuchos::ArrayRCP<const size_t>(numNonZero, 0, numLocalElements_, false);
+
+    A = Teuchos::rcp(new Matrix(map, nnz, Tpetra::StaticProfile));
     std::cerr << " DONE." << std::endl;
 
-    b = Teuchos::rcp(new Epetra_Vector(*map));
-    x = Teuchos::rcp(new Epetra_Vector(*map));
+    b = Teuchos::rcp(new Vector(map));
+    x = Teuchos::rcp(new Vector(map));
 
-    problem = Teuchos::rcp(new Belos::LinearProblem<double, Epetra_MultiVector, Epetra_Operator>(A, x, b));
+    problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
 
-    Belos::SolverFactory<double, Epetra_MultiVector, Epetra_Operator> factory;
+    Belos::SolverFactory<Scalar, MultiVector, Operator> factory;
+
     Teuchos::RCP<Teuchos::ParameterList> solverParams = Teuchos::parameterList();
-
     solverParams->set("Maximum Iterations", 1000);
     solverParams->set("Convergence Tolerance", 1.0e-8);
 
     solver = factory.create("CG", solverParams);
-
     std::cout << "DONE." << std::endl;
 }
 
@@ -171,6 +175,18 @@ void TrilinosStem::solve(
         double* Ky,
         double* u0)
 {
+    Teuchos::RCP<Teuchos::FancyOStream> fos = Teuchos::fancyOStream(Teuchos::rcpFromRef(std::cout));
+
+    bool insertValues = false;
+
+    if(A->isFillComplete()) {
+        A->resumeFill();
+    } else {
+        insertValues = true;
+    }
+
+    //A->setAllToScalar(0.0);
+    
     std::vector<double> Values(4);
     std::vector<int> Indices(4);
 
@@ -195,49 +211,78 @@ void TrilinosStem::solve(
 
             if(1 != k) {
                 numEntries++;
-                Values.push_back(-ry*c4);
-                Indices.push_back(myGlobalIndices_[i]-nx);
+                if(ny == k) {
+                    Values.push_back(-2.0*ry*c4);
+                    Indices.push_back(myGlobalIndices_[i]-nx);
+                } else {
+                    Values.push_back(-ry*c4);
+                    Indices.push_back(myGlobalIndices_[i]-nx);
+                }
             } 
-            
+
             if(ny != k) {
                 numEntries++;
-                Values.push_back(-ry*c5);
-                Indices.push_back(myGlobalIndices_[i]+nx);
+                if(1 == k) {
+                    Values.push_back(-2.0*ry*c5);
+                    Indices.push_back(myGlobalIndices_[i]+nx);
+                } else {
+                    Values.push_back(-ry*c5);
+                    Indices.push_back(myGlobalIndices_[i]+nx);
+                }
             }
 
             if(1 != j) {
                 numEntries++;
-                Values.push_back(-rx*c2);
-                Indices.push_back(myGlobalIndices_[i]-1);
+                if(nx == j) {
+                    Values.push_back(-2.0*rx*c2);
+                    Indices.push_back(myGlobalIndices_[i]-1);
+                } else {
+                    Values.push_back(-rx*c2);
+                    Indices.push_back(myGlobalIndices_[i]-1);
+                }
             }
 
             if(nx != j) {
                 numEntries++;
-                Values.push_back(-rx*c3);
-                Indices.push_back(myGlobalIndices_[i]+1);
+                if (1 == j) {
+                    Values.push_back(-2.0*rx*c3);
+                    Indices.push_back(myGlobalIndices_[i]+1);
+                } else {
+                    Values.push_back(-rx*c3);
+                    Indices.push_back(myGlobalIndices_[i]+1);
+                }
             }
 
-            A->InsertGlobalValues(myGlobalIndices_[i], numEntries, &Values[0], &Indices[0]);
-            A->InsertGlobalValues(myGlobalIndices_[i], 1, &diagonal, &myGlobalIndices_[i]);
+            if (insertValues) {
+                A->insertGlobalValues(myGlobalIndices_[i], 
+                        Teuchos::ArrayView<Ordinal>(&Indices[0], numEntries), 
+                        Teuchos::ArrayView<Scalar>(&Values[0], numEntries));
+
+                A->insertGlobalValues(myGlobalIndices_[i], 
+                        Teuchos::tuple<Ordinal>( myGlobalIndices_[i] ),
+                        Teuchos::tuple<Scalar>(diagonal));
+            } else {
+                A->replaceGlobalValues(myGlobalIndices_[i], 
+                        Teuchos::ArrayView<Ordinal>(&Indices[0], numEntries), 
+                        Teuchos::ArrayView<Scalar>(&Values[0], numEntries));
+
+                A->replaceGlobalValues(myGlobalIndices_[i], 
+                        Teuchos::tuple<Ordinal>( myGlobalIndices_[i] ),
+                        Teuchos::tuple<Scalar>(diagonal));
+            }
 
             i++;
         }
     }
 
-    A->FillComplete();
-    //A->Print(std::cout);
+    A->fillComplete();
 
     Indices.clear();
     Values.clear();
 
     i = 0;
-
-    b->PutScalar(0.0);
-
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            Indices.push_back(myGlobalIndices_[i]);
-
             double c2 = Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
             double c3 = Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx + 1)];
             double c4 = Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
@@ -245,45 +290,32 @@ void TrilinosStem::solve(
 
             double value = u0[ARRAY2D(j,k,local_xmin-2, local_ymin-2, local_nx)];
 
-            if(global_ymin == k) {
-                value += ry*c4*u0[ARRAY2D(j,k-1,local_xmin-2,local_ymin-2,local_nx)];
-            } else if(global_ymax == k) {
-                value += ry*c5*u0[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
-            }
+//            if(global_ymin == k) {
+//                value += ry*c4*u0[ARRAY2D(j,k-1,local_xmin-2,local_ymin-2,local_nx)];
+//            } else if(global_ymax == k) {
+//                value += ry*c5*u0[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
+//            }
+//
+//            if(global_xmin == j) {
+//                value += rx*c2*u0[ARRAY2D(j-1,k,local_xmin-2,local_ymin-2,local_nx)];
+//            } else if(global_xmax == j) {
+//                value += rx*c3*u0[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
+//            }
 
-            if(global_xmin == j) {
-                value += rx*c2*u0[ARRAY2D(j-1,k,local_xmin-2,local_ymin-2,local_nx)];
-            } else if(global_xmax == j) {
-                value += rx*c3*u0[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
-            }
-
-            Values.push_back(value);
-
+            b->replaceGlobalValue(myGlobalIndices_[i], value);
             i++;
         }
     }
-
-    b->ReplaceGlobalValues(numLocalElements_, &Values[0], &Indices[0]);
-    //b->Print(std::cout);
-
-    Indices.clear();
-    Values.clear();
 
     i = 0;
-
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            Indices.push_back(myGlobalIndices_[i]);
-
             double value = u0[ARRAY2D(j,k, local_xmin-2, local_ymin-2, local_nx)];
-            Values.push_back(value);
 
+            x->replaceGlobalValue(myGlobalIndices_[i], value);
             i++;
         }
     }
-
-    x->ReplaceGlobalValues(numLocalElements_, &Values[0], &Indices[0]);
-    //x->Print(std::cout);
 
     problem->setOperator(A);
     problem->setLHS(x);
@@ -298,14 +330,13 @@ void TrilinosStem::solve(
     const int numIters = solver->getNumIters();
     std::cout << "[STEM]: num_iters = " << numIters << std::endl;
 
-    double* updatedValues = new double[numLocalElements_];
-    x->ExtractCopy(updatedValues);
-    //x->Print(std::cout);
+    Teuchos::Array<Scalar> solution(numLocalElements_);
+    x->get1dCopy(solution, numLocalElements_);
 
     i = 0;
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            u0[ARRAY2D(j,k,local_xmin-2, local_ymin-2, local_nx)] = updatedValues[i];
+            u0[ARRAY2D(j,k,local_xmin-2, local_ymin-2, local_nx)] = solution[i];
             i++;
         }
     }

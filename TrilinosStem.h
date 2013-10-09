@@ -4,15 +4,25 @@
 #include "Teuchos_RCPDecl.hpp"
 
 #include "BelosLinearProblem.hpp"
-#include "BelosEpetraAdapter.hpp"
 #include "BelosSolverManager.hpp"
 
-#include "Epetra_Map.h"
-#include "Epetra_CrsMatrix.h"
-#include "Epetra_Vector.h"
-#include "Epetra_MultiVector.h"
+#include "Tpetra_Map.hpp"
+#include "Tpetra_CrsMatrix.hpp"
+#include "Tpetra_Vector.hpp"
+#include "Tpetra_MultiVector.hpp"
+#include "Tpetra_DefaultPlatform.hpp"
 
 class TrilinosStem {
+    typedef double Scalar;
+    typedef int Ordinal;
+    typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
+    typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType Node;
+    typedef Tpetra::Map<Ordinal,Ordinal,Node> Map;
+    typedef Tpetra::CrsMatrix<Scalar,Ordinal,Ordinal,Node> Matrix;
+    typedef Tpetra::Vector<Scalar,Ordinal,Ordinal,Node> Vector;
+    typedef Tpetra::Operator<Scalar,Ordinal,Ordinal,Node> Operator;
+    typedef Tpetra::MultiVector<Scalar,Ordinal,Ordinal,Node> MultiVector;
+
     public:
         TrilinosStem();
         static void initialise( int nx, int ny,
@@ -30,13 +40,13 @@ class TrilinosStem {
                 double* Ky,
                 double* u0);
     private:
-        static Teuchos::RCP<Epetra_Map> map;
-        static Teuchos::RCP<Epetra_CrsMatrix> A;
-        static Teuchos::RCP<Epetra_Vector> b;
-        static Teuchos::RCP<Epetra_Vector> x;
+        static Teuchos::RCP<const Map> map;
+        static Teuchos::RCP<Matrix> A;
+        static Teuchos::RCP<Vector> b;
+        static Teuchos::RCP<Vector> x;
 
-        static Teuchos::RCP<Belos::LinearProblem<double, Epetra_MultiVector, Epetra_Operator> > problem;
-        static Teuchos::RCP<Belos::SolverManager<double, Epetra_MultiVector, Epetra_Operator> > solver;
+        static Teuchos::RCP<Belos::LinearProblem<double, MultiVector, Operator> > problem;
+        static Teuchos::RCP<Belos::SolverManager<double, MultiVector, Operator> > solver;
 
         static int* myGlobalIndices_;
         static int numLocalElements_;
