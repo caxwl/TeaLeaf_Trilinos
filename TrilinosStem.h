@@ -1,5 +1,5 @@
-#ifndef STEM_TRILINOS_H_
-#define STEM_TRILINOS_H_
+#ifndef TRILINOS_STEM_H_
+#define TRILINOS_STEM_H_
 
 #include "Teuchos_RCPDecl.hpp"
 
@@ -11,6 +11,8 @@
 #include "Tpetra_Vector.hpp"
 #include "Tpetra_MultiVector.hpp"
 #include "Tpetra_DefaultPlatform.hpp"
+
+#include "Ifpack2_Diagonal.hpp"
 
 class TrilinosStem {
     typedef double Scalar;
@@ -47,6 +49,7 @@ class TrilinosStem {
 
         static Teuchos::RCP<Belos::LinearProblem<double, MultiVector, Operator> > problem;
         static Teuchos::RCP<Belos::SolverManager<double, MultiVector, Operator> > solver;
+        static Teuchos::RCP<Ifpack2::Preconditioner<Scalar, Ordinal, Ordinal, Node> > preconditioner;
 
         static int* myGlobalIndices_;
         static int numLocalElements_;

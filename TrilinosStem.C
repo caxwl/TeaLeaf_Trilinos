@@ -17,6 +17,7 @@ int TrilinosStem::numLocalElements_;
 
 Teuchos::RCP<Belos::LinearProblem<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::problem;
 Teuchos::RCP<Belos::SolverManager<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::solver;
+Teuchos::RCP<Ifpack2::Preconditioner<TrilinosStem::Scalar, TrilinosStem::Ordinal, TrilinosStem::Ordinal, TrilinosStem::Node> > TrilinosStem::preconditioner;
 
 extern "C" {
     void setup_trilinos_(
@@ -322,6 +323,11 @@ void TrilinosStem::solve(
     problem->setRHS(b);
 
     problem->setProblem();
+
+    const Teuchos::RCP<const TrilinosStem::Matrix> const_ptr_to_A = A;
+    preconditioner = Teuchos::rcp(new Ifpack2::Diagonal<const TrilinosStem::Matrix>(const_ptr_to_A));
+    preconditioner->compute();
+    problem->setLeftPrec(preconditioner);
 
     solver->setProblem(problem);
 
