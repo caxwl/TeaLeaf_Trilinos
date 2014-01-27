@@ -208,7 +208,8 @@ void TrilinosStem::solve(
 
             numEntries = 0;
 
-            double diagonal = (1+(2*rx)+(2*ry));
+            double diagonal = (1.0 + (2.0*(0.5*(c2+c3))*rx)
+                + (2.0*(0.5*(c4+c5))*ry));
 
             if(1 != k) {
                 numEntries++;

@@ -39,7 +39,8 @@
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
 # Trilinos stuff
-include $(MYAPP_TRILINOS_DIR)/include/Makefile.export.Trilinos
+TRILINOS_DIR=libs/trilinos
+include $(TRILINOS_DIR)/include/Makefile.export.Trilinos
 TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS) $(Trilinos_TPL_LIBRARY_DIRS)
 TRILINOS_LIBRARIES=$(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES) #-L/home/dab/opt/lapack/3.3.1/intel-12/serial/lib -llapack -lblas 
 
