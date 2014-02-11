@@ -21,6 +21,8 @@
 
 ## TeaLeaf
 
+## Compling
+
 - If you didn't install Trilinos to `libs/trilinos`, edit the TeaLeaf
   `Makefile` and specify the directory that you have installed Trilinos in.
 - In many case just typing `make` in the required software version will work. 
