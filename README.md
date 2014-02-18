@@ -1,6 +1,6 @@
 ## Trilinos
 
-- Download the Trilinos packages from trilinos.sandia.gov, we use version
+- Register and download the Trilinos packages from trilinos.sandia.gov, we use version
   11.4.3, http://trilinos.sandia.gov/download/trilinos-11.4.html
 - Extract the downloaded file, and create a `build` directory inside the
   newly-created folder.
