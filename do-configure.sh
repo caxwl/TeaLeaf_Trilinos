@@ -39,12 +39,14 @@ rm -f CMakeCache.txt
 #   packages that are to be built.
 #
 
+PREFIX=/home/wpg/TeaLeaf/tealeaf_trilinos/libs/trilinos
+
 cmake \
     -D CMAKE_INSTALL_PREFIX:PATH=$PREFIX \
     -D CMAKE_BUILD_TYPE:STRING=DEBUG \
-    -D CMAKE_CXX_COMPILER:FILEPATH=$CXX_MPI_COMPILER \
-    -D CMAKE_C_COMPILER:FILEPATH=$C_MPI_COMPILER \
-    -D CMAKE_Fortran_COMPILER:FILEPATH=$MPI_COMPILER  \
+    -D CMAKE_CXX_COMPILER:FILEPATH=mpiicpc \
+    -D CMAKE_C_COMPILER:FILEPATH=mpiicc \
+    -D CMAKE_Fortran_COMPILER:FILEPATH=mpiifort  \
     -D Trilinos_WARNINGS_AS_ERRORS_FLAGS:STRING="" \
     -D CMAKE_VERBOSE_MAKEFILE:BOOL=TRUE \
     -D Trilinos_ENABLE_ALL_PACKAGES:BOOL=FALSE \
@@ -55,5 +57,11 @@ cmake \
     -D Trilinos_ENABLE_TESTS:BOOL=ON \
     -D Trilinos_ENABLE_EXAMPLES:BOOL=ON \
     -D TPL_ENABLE_MPI:BOOL=ON \
+    -D BLAS_LIBRARY_DIRS:FILEPATH=/opt/lapack/3.4.2/intel-13.1.1.163/lib \
+    -D LAPACK_LIBRARY_DIRS:FILEPATH=/opt/lapack/3.4.2/intel-13.1.1.163/lib \
+    -D CMAKE_CXX_FLAGS:STRING="-DMPICH_IGNORE_CXX_SEEK" \
     $EXTRA_ARGS \
     ../
+
+make
+make install
