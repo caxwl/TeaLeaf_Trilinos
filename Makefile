@@ -61,6 +61,7 @@
 
 # Trilinos stuff
 TRILINOS_DIR=libs/trilinos
+TRILINOS_DIR=libs/trilinos
 include $(TRILINOS_DIR)/include/Makefile.export.Trilinos
 TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS) $(Trilinos_TPL_LIBRARY_DIRS)
 TRILINOS_LIBRARIES=$(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES) #-L/home/dab/opt/lapack/3.3.1/intel-12/serial/lib -llapack -lblas 
@@ -88,7 +89,7 @@ FLAGS_PGI       = -fastsse -gopt -Mipa=fast -Mlist
 FLAGS_PATHSCALE = -O3
 FLAGS_XL       = -O5 -qipa=partition=large -g -qfullpath -Q -qsigtrap -qextname=flush:ideal_gas_kernel_c:viscosity_kernel_c:pdv_kernel_c:revert_kernel_c:accelerate_kernel_c:flux_calc_kernel_c:advec_cell_kernel_c:advec_mom_kernel_c:reset_field_kernel_c:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c -qlistopt -qattr=full -qlist -qreport -qxref=full -qsource -qsuppress=1506-224:1500-036
 FLAGS_          = -O3
-CFLAGS_INTEL     = -O3 -ipo -no-prec-div -restrict -fno-alias
+CFLAGS_INTEL     = -O3 -ipo -no-prec-div -restrict -fno-alias -DMPICH_IGNORE_CXX_SEEK
 CFLAGS_SUN       = -fast -xipo=2
 CFLAGS_GNU       = -O3 -march=native -funroll-loops
 CFLAGS_CRAY      = -em -h list=a
@@ -138,6 +139,7 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 		-lstdc++ \
 		data.f90			\
 		definitions.f90			\
+	        pack_kernel.f90			\
 		clover.f90			\
 		report.f90			\
 		timer.f90			\
@@ -176,14 +178,14 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 		advection.f90			\
 		reset_field_kernel.f90		\
 		reset_field.f90			\
-		set_field_kernel.f90    \
-		set_field.f90           \
+		set_field_kernel.f90    	\
+		set_field.f90           	\
 		tea_leaf_kernel.f90             \
-		tea.f90                    \
-		hydro.f90			            \
+		tea.f90                    	\
+		hydro.f90		        \
 		visit.f90			\
 		tea_leaf.f90			\
-		accelerate_kernel_c.o           \
+	 	accelerate_kernel_c.o           \
 		PdV_kernel_c.o                  \
 		flux_calc_kernel_c.o            \
 		revert_kernel_c.o               \
@@ -192,23 +194,37 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 		viscosity_kernel_c.o            \
 		advec_mom_kernel_c.o            \
 		advec_cell_kernel_c.o           \
+		calc_dt_kernel_c.o		\
+		field_summary_kernel_c.o	\
+		update_halo_kernel_c.o		\
+		timer_c.o                       \
+		pack_kernel_c.o			\
+		generate_chunk_kernel_c.o	\
+		initialise_chunk_kernel_c.o	\
 		tea_leaf_kernel_c.o             \
 		TrilinosStem.o                  \
-		$(TRILINOS_LIBRARIES) \
+		$(TRILINOS_LIBRARIES) 		\
 		-o tea_leaf; echo $(MESSAGE)
 
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
-		accelerate_kernel_c.c           \
-		PdV_kernel_c.c                  \
-		flux_calc_kernel_c.c            \
-		revert_kernel_c.c               \
-		reset_field_kernel_c.c          \
-		ideal_gas_kernel_c.c            \
-		viscosity_kernel_c.c            \
-		advec_mom_kernel_c.c            \
-		advec_cell_kernel_c.c           \
-		tea_leaf_kernel_c.c
+	accelerate_kernel_c.c           \
+	PdV_kernel_c.c                  \
+	flux_calc_kernel_c.c            \
+	revert_kernel_c.c               \
+	reset_field_kernel_c.c          \
+	ideal_gas_kernel_c.c            \
+	viscosity_kernel_c.c            \
+	advec_mom_kernel_c.c            \
+	advec_cell_kernel_c.c           \
+	calc_dt_kernel_c.c		\
+	field_summary_kernel_c.c	\
+	update_halo_kernel_c.c		\
+	pack_kernel_c.c			\
+	generate_chunk_kernel_c.c	\
+	initialise_chunk_kernel_c.c	\
+	timer_c.c                       \
+	tea_leaf_kernel_c.c
 
 trilinos-stem: *.C
 	$(CXX_MPI_COMPILER) $(CFLAGS) TrilinosStem.C
