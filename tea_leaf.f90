@@ -41,6 +41,7 @@ PROGRAM tea_leaf
   IMPLICIT NONE
 
 !$ INTEGER :: OMP_GET_NUM_THREADS,OMP_GET_THREAD_NUM
+
   CALL clover_init_comms()
 
 !$OMP PARALLEL
