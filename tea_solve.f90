@@ -518,21 +518,21 @@ SUBROUTINE tea_leaf()
       ENDIF
 
       IF(use_trilinos_kernels) THEN
-        CALL trilinos_solve(grid%x_cells,          &
-                            grid%y_cells,          &
-                            chunks(c)%field%left,  &
-                            chunks(c)%field%right, &
-                            chunks(c)%field%bottom,&
-                            chunks(c)%field%top,   &
-                            1,                     &
-                            grid%x_cells,          &
-                            1,                     &
-                            grid%y_cells,          &
-                            rx,                    &
-                            ry,                    &
-                            chunks(c)%field%work_array6,&
-                            chunks(c)%field%work_array7,&
-                            chunks(c)%field%u)
+        CALL trilinos_solve(grid%x_cells,             &
+                            grid%y_cells,             &
+                            chunks(c)%field%left,     &
+                            chunks(c)%field%right,    &
+                            chunks(c)%field%bottom,   &
+                            chunks(c)%field%top,      &
+                            1,                        &
+                            grid%x_cells,             &
+                            1,                        &
+                            grid%y_cells,             &
+                            rx,                       &
+                            ry,                       &
+                            chunks(c)%field%vector_Kx,&
+                            chunks(c)%field%vector_Ky,&
+                            chunks(c)%field%u         )
       ENDIF
 
       IF (tl_check_result) THEN
