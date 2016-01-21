@@ -72,12 +72,23 @@
 
 # Trilinos stuff
 TRILINOS_DIR=libs/trilinos
-TRILINOS_DIR=libs/trilinos
 include $(TRILINOS_DIR)/include/Makefile.export.Trilinos
-TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS) $(Trilinos_TPL_LIBRARY_DIRS)
-TRILINOS_LIBRARIES=$(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES) #-L/home/dab/opt/lapack/3.3.1/intel-12/serial/lib -llapack -lblas 
-
-
+TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS)
+TRILINOS_LIBRARIES=$(TRILINOS_LIBRARY_DIRS) -lkokkos         \
+				            -ltpetra         \
+				            -lteuchoscomm    \
+				            -lteuchoscore    \
+				            -lteuchosnumerics \
+				            -lteuchosparameterlist  \
+				            -lteuchosremainder  \
+					    -ltriutils \
+				            -lkokkosdisttsqr \
+				            -lkokkoslinalg   \
+				            -lkokkosnodeapi  \
+				            -lkokkosnodetsqr \
+				            -ltpi            \
+				            -lbelos          \
+				            -lbelostpetra    #-L/lapack/lib -llapack -lblas
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
@@ -117,7 +128,7 @@ ifdef DEBUG
   FLAGS_PATHSCALE = -O0 -g
   FLAGS_XL       = -O0 -g -qfullpath -qcheck -qflttrap=ov:zero:invalid:en -qsource -qinitauto=FF -qmaxmem=-1 -qinit=f90ptr -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c
   FLAGS_          = -O0 -g
-  CFLAGS_INTEL    = -O0 -g -debug all -traceback
+  CFLAGS_INTEL    = -O0 -g -debug all -traceback -DMPICH_IGNORE_CXX_SEEK
   CFLAGS_SUN      = -g -O0 -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
   CFLAGS_GNU       = -O0 -g -O -Wall -Wextra -fbounds-check
   CFLAGS_CRAY     = -O0 -g -em -eD
@@ -137,33 +148,22 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-PETSC_SOURCE=PetscLeaf.F90
-PETSC_DIR=${COM_PATH_P}/arch-linux2-c-opt
-PETSC_DIR_F=${COM_PATH_P}
-PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc
-PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/
 REQ_LIB=-lstdc++
 
-ifdef NO_PETSC 
-  COM_PATH_P=
-  PETSC_SOURCE=PetscLeaf_dummy.F90
-  PETSC_DIR=
-  PETSC_INC=
-  PETSC_DIR_F=
-  PETSC_LIB=
+FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS)
+CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) $(Trilinos_INCLUDE_DIRS) -c
+
+ifdef NO_TRILINOS
 endif
 
-FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC} $(REQ_LIB)
-CFLAGS=${CFLAGS_$(COMPILER)} ${OMP} ${I3E} ${C_OPTIONS} ${PETSC_INC} -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
+CXX_MPI_COMPILER=mpicxx -DMPICH_IGNORE_CXX_SEEK
 
 tea_leaf: trilinos-stem c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
-	$(TRILINOS_LIBRARY_DIRS) 	\
 	data.f90			\
 	definitions.f90			\
-	${PETSC_SOURCE}		        \
 	pack_kernel.f90			\
 	tea.f90				\
 	report.f90			\
@@ -195,7 +195,6 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 	tea_leaf.f90			\
 	diffuse.f90                     \
 	timer_c.o                       \
-	$(PETSC_LIB)   			\
 	$(REQ_LIB)			\
 	TrilinosStem.o                  \
 	$(TRILINOS_LIBRARIES) 		\

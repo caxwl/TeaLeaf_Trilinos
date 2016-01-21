@@ -3,7 +3,14 @@
 #include "BelosSolverFactory.hpp"
 #include <BelosTpetraAdapter.hpp>
 
+#include "Epetra_Map.h"
+
+// Teuchos
+#include "Teuchos_RCP.hpp"
 #include "Teuchos_ParameterList.hpp"
+#include "Teuchos_CommandLineProcessor.hpp"
+#include "Teuchos_GlobalMPISession.hpp"
+#include "Teuchos_DefaultComm.hpp"
 
 #define ARRAY2D(i,j,imin,jmin,ni) (i-(imin))+(((j)-(jmin))*(ni))
 
@@ -119,7 +126,7 @@ void TrilinosStem::initialise(
     size_t* numNonZero = new size_t[numLocalElements_];
 
     i = 0;
-    
+
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
             size_t nnz = 1;
@@ -153,9 +160,10 @@ void TrilinosStem::initialise(
 
     Teuchos::RCP<Teuchos::ParameterList> solverParams = Teuchos::parameterList();
     solverParams->set("Maximum Iterations", 1000);
-    solverParams->set("Convergence Tolerance", 1.0e-8);
+     // TODO: Tolerance level causing issues at scale??
+    solverParams->set("Convergence Tolerance", 1.0e-10); 
 
-    solver = factory.create("CG", solverParams);
+    solver = factory.create("RCG", solverParams);
     std::cout << "DONE." << std::endl;
 }
 
@@ -187,7 +195,7 @@ void TrilinosStem::solve(
     }
 
     //A->setAllToScalar(0.0);
-    
+
     std::vector<double> Values(4);
     std::vector<int> Indices(4);
 
@@ -201,74 +209,68 @@ void TrilinosStem::solve(
             Values.clear();
             Indices.clear();
 
-            double c2 = Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c3 = Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c4 = Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c5 = Ky[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx + 1)];
+            double c2 = -rx*Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c3 = -rx*Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c4 = -ry*Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c5 = -ry*Ky[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
 
             numEntries = 0;
 
-            double diagonal = (1.0 + (2.0*(0.5*(c2+c3))*rx)
-                + (2.0*(0.5*(c4+c5))*ry));
-
-            if(1 != k) {
-                numEntries++;
-                if(ny == k) {
-                    Values.push_back(-2.0*ry*c4);
-                    Indices.push_back(myGlobalIndices_[i]-nx);
-                } else {
-                    Values.push_back(-ry*c4);
-                    Indices.push_back(myGlobalIndices_[i]-nx);
-                }
-            } 
-
-            if(ny != k) {
-                numEntries++;
-                if(1 == k) {
-                    Values.push_back(-2.0*ry*c5);
-                    Indices.push_back(myGlobalIndices_[i]+nx);
-                } else {
-                    Values.push_back(-ry*c5);
-                    Indices.push_back(myGlobalIndices_[i]+nx);
-                }
+            if(j == global_xmin) {
+                c2 = 0;
             }
-
             if(1 != j) {
                 numEntries++;
-                if(nx == j) {
-                    Values.push_back(-2.0*rx*c2);
-                    Indices.push_back(myGlobalIndices_[i]-1);
-                } else {
-                    Values.push_back(-rx*c2);
-                    Indices.push_back(myGlobalIndices_[i]-1);
-                }
+                Values.push_back(c2);
+                Indices.push_back(myGlobalIndices_[i]-1);
             }
 
+
+            if(j == global_xmax) {
+                c3 = 0;
+            }
             if(nx != j) {
                 numEntries++;
-                if (1 == j) {
-                    Values.push_back(-2.0*rx*c3);
-                    Indices.push_back(myGlobalIndices_[i]+1);
-                } else {
-                    Values.push_back(-rx*c3);
-                    Indices.push_back(myGlobalIndices_[i]+1);
-                }
+                Values.push_back(c3);
+                Indices.push_back(myGlobalIndices_[i]+1);
             }
 
+            if (k == global_ymin) {
+                c4 = 0;
+            }
+            if(1 != k) {
+                numEntries++;
+                Values.push_back(c4);
+                Indices.push_back(myGlobalIndices_[i]-nx);
+            }
+
+            if (k == global_ymax) {
+                c5 = 0;
+            }
+            if(ny != k) {
+                numEntries++;
+                Values.push_back(c5);
+                Indices.push_back(myGlobalIndices_[i]+nx);
+            }
+
+
+            double diagonal = (1.0 -c2 -c3 -c4 -c5);
+
+
             if (insertValues) {
-                A->insertGlobalValues(myGlobalIndices_[i], 
+                A->insertGlobalValues(myGlobalIndices_[i],
                         Teuchos::ArrayView<Ordinal>(&Indices[0], numEntries), 
                         Teuchos::ArrayView<Scalar>(&Values[0], numEntries));
 
-                A->insertGlobalValues(myGlobalIndices_[i], 
+                A->insertGlobalValues(myGlobalIndices_[i],
                         Teuchos::tuple<Ordinal>( myGlobalIndices_[i] ),
                         Teuchos::tuple<Scalar>(diagonal));
             } else {
-                A->replaceGlobalValues(myGlobalIndices_[i], 
-                        Teuchos::ArrayView<Ordinal>(&Indices[0], numEntries), 
+                A->replaceGlobalValues(myGlobalIndices_[i],
+                        Teuchos::ArrayView<Ordinal>(&Indices[0], numEntries),
                         Teuchos::ArrayView<Scalar>(&Values[0], numEntries));
 
-                A->replaceGlobalValues(myGlobalIndices_[i], 
+                A->replaceGlobalValues(myGlobalIndices_[i],
                         Teuchos::tuple<Ordinal>( myGlobalIndices_[i] ),
                         Teuchos::tuple<Scalar>(diagonal));
             }
@@ -285,24 +287,12 @@ void TrilinosStem::solve(
     i = 0;
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            double c2 = Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c3 = Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c4 = Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx + 1)];
-            double c5 = Ky[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx + 1)];
+            double c2 = Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c3 = Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c4 = Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
+            double c5 = Ky[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
 
             double value = u0[ARRAY2D(j,k,local_xmin-2, local_ymin-2, local_nx)];
-
-//            if(global_ymin == k) {
-//                value += ry*c4*u0[ARRAY2D(j,k-1,local_xmin-2,local_ymin-2,local_nx)];
-//            } else if(global_ymax == k) {
-//                value += ry*c5*u0[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
-//            }
-//
-//            if(global_xmin == j) {
-//                value += rx*c2*u0[ARRAY2D(j-1,k,local_xmin-2,local_ymin-2,local_nx)];
-//            } else if(global_xmax == j) {
-//                value += rx*c3*u0[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
-//            }
 
             b->replaceGlobalValue(myGlobalIndices_[i], value);
             i++;

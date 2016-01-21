@@ -180,7 +180,7 @@ SUBROUTINE tea_leaf()
       IF (profiler_on) profiler%tea_init = profiler%tea_init + (timer() - init_time)
       IF (profiler_on) solve_time = timer()
 
-      IF(.NOT.use_PETSC_kernels.AND.NOT.use_trilinos_kernels) THEN
+      IF((.NOT.use_PETSC_kernels).AND.(.NOT.use_trilinos_kernels)) THEN
         DO itcount=1,max_iters
 
           iteration_time = timer()
@@ -491,33 +491,8 @@ SUBROUTINE tea_leaf()
 
       ENDIF
 
-      IF (use_PETSC_kernels) THEN
-        petsc_mod=1 ! Get get the iteration print consistent
-        ! Substitute for PETSc Solve
-
-        CALL setupMatA_petsc(1,rx,ry)
-        CALL setupRHS_petsc(1,rx,ry)
-        CALL setupSol_petsc(1,rx,ry)
-
-        IF(use_pgcg) THEN
-          CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
-          itcount=numit_cg+numit_cheby
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, &
-                                           ' Cheby Iterations'
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', &
-                                           total_cheby_iter, ' Chebyshev Iterations'
-        ELSE 
-          CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
-          itcount=numit+1
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
-        ENDIF
-   
-        CALL getSolution_petsc(1)
-
-      ENDIF
-
       IF(use_trilinos_kernels) THEN
+        itcount=0
         CALL trilinos_solve(grid%x_cells,             &
                             grid%y_cells,             &
                             chunks(c)%field%left,     &

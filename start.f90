@@ -92,19 +92,17 @@ SUBROUTINE start
   CALL tea_barrier
 
   ! Substitute for PETSc Setup Call
-  IF(use_PETSC_kernels) THEN
-    IF(parallel%boss) WRITE(g_out,*) ' Using PETSc'
-    CALL setup_petsc(eps,max_iters)
-  ENDIF
   IF(use_trilinos_kernels)THEN
-    CALL setup_trilinos(grid%x_cells,          &
-                        grid%y_cells,          &
-                        chunks(c)%field%x_max, &
-                        chunks(c)%field%y_max, &
-                        chunks(c)%field%left,  &
-                        chunks(c)%field%right, &
-                        chunks(c)%field%bottom,&
-                        chunks(c)%field%top)
+    DO c=1,chunks_per_task
+      CALL setup_trilinos(grid%x_cells,          &
+                          grid%y_cells,          &
+                          chunks(c)%field%x_max, &
+                          chunks(c)%field%y_max, &
+                          chunks(c)%field%left,  &
+                          chunks(c)%field%right, &
+                          chunks(c)%field%bottom,&
+                          chunks(c)%field%top)
+    ENDDO
   ENDIF
 
   DO c=1,chunks_per_task
