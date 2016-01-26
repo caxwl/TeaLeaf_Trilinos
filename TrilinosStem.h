@@ -41,6 +41,7 @@ class TrilinosStem {
                 double* Kx,
                 double* Ky,
                 double* u0);
+        static void finalise();
     private:
         static Teuchos::RCP<const Map> map;
         static Teuchos::RCP<Matrix> A;

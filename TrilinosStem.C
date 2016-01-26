@@ -12,6 +12,8 @@
 #include "Teuchos_GlobalMPISession.hpp"
 #include "Teuchos_DefaultComm.hpp"
 
+#include <Ifpack2_Factory.hpp>
+
 #define ARRAY2D(i,j,imin,jmin,ni) (i-(imin))+(((j)-(jmin))*(ni))
 
 Teuchos::RCP<const TrilinosStem::Map> TrilinosStem::map;
@@ -78,6 +80,11 @@ extern "C" {
                 Kx,
                 Ky,
                 u0);
+    }
+
+    void finalise_trilinos_()
+    {
+        TrilinosStem::finalise();
     }
 }
 
@@ -162,8 +169,17 @@ void TrilinosStem::initialise(
     solverParams->set("Maximum Iterations", 1000);
      // TODO: Tolerance level causing issues at scale??
     solverParams->set("Convergence Tolerance", 1.0e-10); 
+    int verbosity = Belos::Errors + Belos::Warnings;
+    verbosity += Belos::TimingDetails + Belos::StatusTestDetails;
+    verbosity += Belos::IterationDetails + Belos::FinalSummary;
+    //verbosity += Belos::Debug;
+    solverParams->set("Verbosity", verbosity);
+    solverParams->set("Output Frequency", 1);
+    solverParams->set( "Output Style", (int) Belos::Brief);
 
     solver = factory.create("RCG", solverParams);
+    //solver = factory.create("GMRES", solverParams);
+    //solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
     std::cout << "DONE." << std::endl;
 }
 
@@ -315,9 +331,19 @@ void TrilinosStem::solve(
 
     problem->setProblem();
 
-    const Teuchos::RCP<const TrilinosStem::Matrix> const_ptr_to_A = A;
-    preconditioner = Teuchos::rcp(new Ifpack2::Diagonal<const TrilinosStem::Matrix>(const_ptr_to_A));
-    preconditioner->compute();
+    // v11.x and earlier
+    //const Teuchos::RCP<const TrilinosStem::Matrix> const_ptr_to_A = A;
+    //preconditioner = Teuchos::rcp(new Ifpack2::Diagonal<const TrilinosStem::Matrix>(const_ptr_to_A));
+
+    // v12.x onwards
+    typedef Ifpack2::Preconditioner<> prec_type;
+    Teuchos::RCP<prec_type> preconditioner;
+    typedef Tpetra::RowMatrix<> row_matrix_type;
+    preconditioner = Ifpack2::Factory::create<row_matrix_type> ("DIAGONAL", A);
+    preconditioner->initialize ();
+
+    preconditioner->compute ();
+
     problem->setLeftPrec(preconditioner);
 
     solver->setProblem(problem);
@@ -338,3 +364,19 @@ void TrilinosStem::solve(
         }
     }
 }
+
+void TrilinosStem::finalise()
+{
+    Teuchos::TimeMonitor::summarize();
+
+    //Free up the storage - Teuchos::RCP objects just need to have the reference counters decremented to invoke freeing of the object
+    solver = Teuchos::null;
+    preconditioner = Teuchos::null;
+    problem = Teuchos::null;
+    b = Teuchos::null;
+    x = Teuchos::null;
+    A = Teuchos::null;
+    map = Teuchos::null;
+    delete myGlobalIndices_;
+}
+

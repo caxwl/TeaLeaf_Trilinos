@@ -108,6 +108,8 @@ SUBROUTINE diffuse
     ENDIF
   ENDDO
 
+  IF ( use_trilinos_kernels ) CALL finalise_trilinos()
+
   IF ( profiler_on ) THEN
     ! First we need to find the maximum kernel time for each task. This
     ! seems to work better than finding the maximum time for each kernel and
