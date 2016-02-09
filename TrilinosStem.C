@@ -175,12 +175,19 @@ void TrilinosStem::initialise(
     //verbosity += Belos::Debug;
     solverParams->set("Verbosity", verbosity);
     solverParams->set("Output Frequency", 1);
-    solverParams->set( "Output Style", (int) Belos::Brief);
+    solverParams->set("Output Style", (int) Belos::Brief);
+    //solverParams->set("Implicit Residual Scaling","None"); // Not the cause of the issues with CG
 
-    solver = factory.create("RCG", solverParams);
+    //solver = factory.create("RCG", solverParams);
     //solver = factory.create("GMRES", solverParams);
-    //solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
+    solver = factory.create("CG", solverParams); // This produces erroneous results
+                                                 // when combined with left preconditioning
     std::cout << "DONE." << std::endl;
+
+    std::cout << std::endl << "Parameters available:" << std::endl;
+    solver->getValidParameters()->print();
+    std::cout << std::endl << "Parameters set:" << std::endl;
+    solver->getCurrentParameters()->print();
 }
 
 void TrilinosStem::solve(
@@ -345,8 +352,18 @@ void TrilinosStem::solve(
     preconditioner->compute ();
 
     problem->setLeftPrec(preconditioner);
+    //problem->setRightPrec(preconditioner);
+
+    std::cout << std::endl;
+    std::cout << "Left  preconditioner: " << (problem->getLeftPrec()  != Teuchos::null) << std::endl;
+    std::cout << "Right preconditioner: " << (problem->getRightPrec() != Teuchos::null) << std::endl;
 
     solver->setProblem(problem);
+
+    std::cout << std::endl << "LHS vector 2-norm: " << x->norm2() << " RHS vector 2-norm: " << b->norm2() << std::endl;
+    //problem->getRHS()->print(std::cout);
+
+    std::cout << std::endl << "Number of RHS vectors=" << problem->getRHS()->getNumVectors() << std::endl;
 
     Belos::ReturnType result = solver->solve();
 

@@ -21,9 +21,9 @@
 
 # Agnostic, platform independent makefile for the TeaLeaf benchmark code.
 # It is not meant to be clever in anyway, just a simple build out of the box script.
-# Just make sure mpif90 is in your path. It uses mpif90 even for all builds because this abstracts the base
-#  name of the compiler. If you are on a system that doesn't use mpif90, just replace mpif90 with the compiler name
-#  of choice. The only mpi dependencies in this non-MPI version are mpi_wtime in timer.f90.
+# Just make sure mpio is in your path. It uses mpio even for all builds because this abstracts the base
+#  name of the compiler. If you are on a system that doesn't use mpio, just replace mpio with the compiler name
+#  of choice. The only mpi dependencies in this non-MPI version are mpi_wtime in timer.o.
 
 # There is no single way of turning OpenMP compilation on with all compilers.
 # The known compilers have been added as a variable. By default the make
@@ -71,24 +71,10 @@
 # COM_PATH_P=home/usid/petsc-3.5.2 make
 
 # Trilinos stuff
-TRILINOS_DIR=libs/trilinos
+TRILINOS_DIR=/data4/rsmedley/trilinos
 include $(TRILINOS_DIR)/include/Makefile.export.Trilinos
 TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS)
-TRILINOS_LIBRARIES=$(TRILINOS_LIBRARY_DIRS) -lkokkos         \
-				            -ltpetra         \
-				            -lteuchoscomm    \
-				            -lteuchoscore    \
-				            -lteuchosnumerics \
-				            -lteuchosparameterlist  \
-				            -lteuchosremainder  \
-					    -ltriutils \
-				            -lkokkosdisttsqr \
-				            -lkokkoslinalg   \
-				            -lkokkosnodeapi  \
-				            -lkokkosnodetsqr \
-				            -ltpi            \
-				            -lbelos          \
-				            -lbelostpetra    #-L/lapack/lib -llapack -lblas
+TRILINOS_LIBRARIES=$(TRILINOS_LIBRARY_DIRS) $(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES)
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
@@ -126,7 +112,7 @@ ifdef DEBUG
   FLAGS_CRAY      = -O0 -g -em -eD
   FLAGS_PGI       = -O0 -g -C -Mchkstk -Ktrap=fp -Mchkfpstk -Mchkptr
   FLAGS_PATHSCALE = -O0 -g
-  FLAGS_XL       = -O0 -g -qfullpath -qcheck -qflttrap=ov:zero:invalid:en -qsource -qinitauto=FF -qmaxmem=-1 -qinit=f90ptr -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c
+  FLAGS_XL       = -O0 -g -qfullpath -qcheck -qflttrap=ov:zero:invalid:en -qsource -qinitauto=FF -qmaxmem=-1 -qinit=optr -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c
   FLAGS_          = -O0 -g
   CFLAGS_INTEL    = -O0 -g -debug all -traceback -DMPICH_IGNORE_CXX_SEEK
   CFLAGS_SUN      = -g -O0 -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
@@ -151,7 +137,15 @@ endif
 REQ_LIB=-lstdc++
 
 FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS)
-CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) $(Trilinos_INCLUDE_DIRS) -c
+CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) $(Trilinos_INCLUDE_DIRS)
+CXXFLAGS=$(CFLAGS)
+
+#GNU compile flag for C++11
+CXXFLAGS+= -std=c++11
+
+#GNU compiler MPI flags for 
+REQ_LIB+=$(shell mpif90 --showme:link)
+REQ_LIB+=/usr/lib/gcc/x86_64-linux-gnu/4.8/libgfortran.a
 
 ifdef NO_TRILINOS
 endif
@@ -160,8 +154,48 @@ MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 CXX_MPI_COMPILER=mpicxx -DMPICH_IGNORE_CXX_SEEK
 
-tea_leaf: trilinos-stem c_lover *.f90 Makefile
-	$(MPI_COMPILER) $(FLAGS)	\
+tea_leaf: trilinos-stem c_lover f_lover
+	$(CXX_MPI_COMPILER) $(CFLAGS)	\
+	data.o			\
+	definitions.o			\
+	pack_kernel.o			\
+	tea.o				\
+	report.o			\
+	timer.o			\
+	parse.o			\
+	read_input.o			\
+	initialise_chunk_kernel.o	\
+	initialise_chunk.o		\
+	build_field.o			\
+	update_halo_kernel.o		\
+	update_halo.o			\
+	start.o			\
+	generate_chunk_kernel.o	\
+	generate_chunk.o		\
+	initialise.o			\
+	field_summary_kernel.o	\
+	field_summary.o		\
+	calc_dt_kernel.o		\
+	calc_dt.o			\
+	timestep.o			\
+	set_field_kernel.o		\
+	set_field.o			\
+	tea_leaf_jacobi.o             \
+	tea_leaf_cg.o			\
+	tea_leaf_cheby.o              \
+	tea_leaf_ppcg.o               \
+	tea_solve.o                   \
+	visit.o			\
+	tea_leaf.o			\
+	diffuse.o                     \
+	timer_c.o                       \
+	$(REQ_LIB)			\
+	TrilinosStem.o                  \
+	$(TRILINOS_LIBRARIES) 		\
+	-o tea_leaf; echo $(MESSAGE)
+
+f_lover: *.f90
+	$(MPI_COMPILER) $(FLAGS) -c	\
 	data.f90			\
 	definitions.f90			\
 	pack_kernel.f90			\
@@ -193,19 +227,14 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 	tea_solve.f90                   \
 	visit.f90			\
 	tea_leaf.f90			\
-	diffuse.f90                     \
-	timer_c.o                       \
-	$(REQ_LIB)			\
-	TrilinosStem.o                  \
-	$(TRILINOS_LIBRARIES) 		\
-	-o tea_leaf; echo $(MESSAGE)
+	diffuse.f90
 
-c_lover: *.c Makefile
-	$(C_MPI_COMPILER) $(CFLAGS)     \
+c_lover: *.c
+	$(C_MPI_COMPILER) $(CFLAGS) -c     \
 	timer_c.c
 
 trilinos-stem: *.C
-	$(CXX_MPI_COMPILER) $(CFLAGS) TrilinosStem.C
+	$(CXX_MPI_COMPILER) $(CXXFLAGS) -c TrilinosStem.C
 
 clean:
 	rm -f *.o *.mod *genmod* *.lst *.cub *.ptx tea_leaf
