@@ -1,7 +1,7 @@
 ## Trilinos
 
 - Register and download the Trilinos packages from trilinos.sandia.gov, we use version
-  11.4.3, http://trilinos.sandia.gov/download/trilinos-11.4.html
+  12.4.2, http://trilinos.org/download
 - Extract the downloaded file, and create a `build` directory inside the
   newly-created folder.
 - Copy the `do-configure.sh` script from the TeaLeaf repository into the
