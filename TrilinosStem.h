@@ -30,12 +30,14 @@ class TrilinosStem {
         static void initialise( int nx, int ny,
                 int localNx, int localNy,
                 int local_xmin, int local_xmax,
-                int local_ymin, int local_ymax);
+                int local_ymin, int local_ymax,
+                int tl_max_iters, double tl_eps);
         static void solve(int nx, int ny,
                 int local_xmin, int local_xmax,
                 int local_ymin, int local_ymax,
                 int global_xmin, int global_xmax,
                 int global_ymin, int global_ymax,
+                int* numIters,
                 double rx,
                 double ry,
                 double* Kx,
@@ -48,12 +50,14 @@ class TrilinosStem {
         static Teuchos::RCP<Vector> b;
         static Teuchos::RCP<Vector> x;
 
+        static Teuchos::RCP<Teuchos::ParameterList> solverParams;
         static Teuchos::RCP<Belos::LinearProblem<double, MultiVector, Operator> > problem;
         static Teuchos::RCP<Belos::SolverManager<double, MultiVector, Operator> > solver;
         static Teuchos::RCP<Ifpack2::Preconditioner<Scalar, Ordinal, Ordinal, Node> > preconditioner;
 
         static int* myGlobalIndices_;
         static int numLocalElements_;
+        static int MyPID;
 };
 
 #endif

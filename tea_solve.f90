@@ -57,6 +57,9 @@ SUBROUTINE tea_leaf()
   LOGICAL :: ch_switch_check
   LOGICAL, SAVE :: first=.TRUE.
 
+  LOGICAL, PARAMETER :: reflective_boundary=.TRUE. ! Run the problem with reflective boundaries (PETSc has to do this)
+  LOGICAL, DIMENSION(4) :: zero_boundary
+
   INTEGER :: cg_calc_steps
 
   REAL(KIND=8) :: cg_time, ch_time, total_solve_time, ch_per_it, cg_per_it, iteration_time
@@ -85,6 +88,12 @@ SUBROUTINE tea_leaf()
 
   DO c=1,chunks_per_task
 
+    WHERE (chunks(c)%chunk_neighbours .EQ. EXTERNAL_FACE)
+      zero_boundary = .TRUE.
+    ELSE WHERE
+      zero_boundary = .FALSE.
+    END WHERE
+
     IF(chunks(c)%task.EQ.parallel%task) THEN
 
       ! INIT
@@ -110,6 +119,8 @@ SUBROUTINE tea_leaf()
               chunks(c)%field%x_max,                                  &
               chunks(c)%field%y_min,                                  &
               chunks(c)%field%y_max,                                  &
+              zero_boundary,                                          &
+              reflective_boundary,                                    &
               chunks(c)%field%density,                                &
               chunks(c)%field%energy1,                                &
               chunks(c)%field%u,                                      &
@@ -149,6 +160,8 @@ SUBROUTINE tea_leaf()
               chunks(c)%field%x_max,                       &
               chunks(c)%field%y_min,                       &
               chunks(c)%field%y_max,                       &
+              zero_boundary,                               &
+              reflective_boundary,                         &
               chunks(c)%field%celldx,                      &
               chunks(c)%field%celldy,                      &
               chunks(c)%field%volume,                      &
@@ -482,7 +495,7 @@ SUBROUTINE tea_leaf()
           error=SQRT(error)
           IF(parallel%boss.AND.verbose_on) THEN
 !$          IF(OMP_GET_THREAD_NUM().EQ.0) THEN
-              WRITE(g_out,*)"Residual ",error
+              WRITE(g_out,*)"Residual ",error,error/initial_residual
 !$          ENDIF
           ENDIF
           IF (error.LT. eps*initial_residual) EXIT
@@ -492,7 +505,7 @@ SUBROUTINE tea_leaf()
       ENDIF
 
       IF(use_trilinos_kernels) THEN
-        itcount=0
+        petsc_mod=1
         CALL trilinos_solve(grid%x_cells,             &
                             grid%y_cells,             &
                             chunks(c)%field%left,     &
@@ -503,6 +516,7 @@ SUBROUTINE tea_leaf()
                             grid%x_cells,             &
                             1,                        &
                             grid%y_cells,             &
+                            itcount,                  &
                             rx,                       &
                             ry,                       &
                             chunks(c)%field%vector_Kx,&
@@ -511,6 +525,14 @@ SUBROUTINE tea_leaf()
       ENDIF
 
       IF (tl_check_result) THEN
+        fields=0
+        fields(FIELD_U) = 1
+        IF (profiler_on) halo_time = timer()
+        ! update u
+        CALL update_halo(fields,1)
+        IF (profiler_on) profiler%halo_exchange = profiler%halo_exchange + (timer() - halo_time)
+        IF (profiler_on) solve_time = solve_time + (timer()-halo_time)
+
         IF(use_fortran_kernels) THEN
           CALL tea_leaf_calc_residual(chunks(c)%field%x_min,&
               chunks(c)%field%x_max,                        &
@@ -534,6 +556,7 @@ SUBROUTINE tea_leaf()
         CALL tea_allsum(exact_error)
         IF (profiler_on) profiler%dot_product= profiler%dot_product+ (timer() - dot_product_time)
         IF (profiler_on) solve_time = solve_time + (timer()-dot_product_time)
+        exact_error=sqrt(exact_error)
       ENDIF
 
       IF (profiler_on) profiler%tea_solve = profiler%tea_solve + (timer() - solve_time)
@@ -611,7 +634,7 @@ SUBROUTINE tea_leaf()
 
 END SUBROUTINE tea_leaf
 
-SUBROUTINE tea_leaF_run_ppcg_inner_steps(ch_alphas, ch_betas, theta, &
+SUBROUTINE tea_leaf_run_ppcg_inner_steps(ch_alphas, ch_betas, theta, &
     rx, ry, tl_ppcg_inner_steps, c)
 
   INTEGER :: fields(NUM_FIELDS)

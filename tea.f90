@@ -144,8 +144,7 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
       ENDIF
     ENDIF
   ENDDO
-  ! TODO: Force Trilinos to decompose in 1D for now
-  !IF(split_found.EQ.0.OR.chunk_y.EQ.number_of_chunks) THEN ! Prime number or 1D decomp detected
+  IF(split_found.EQ.0.OR.chunk_y.EQ.number_of_chunks) THEN ! Prime number or 1D decomp detected
     IF(mesh_ratio.GE.1.0) THEN
       chunk_x=number_of_chunks
       chunk_y=1
@@ -153,7 +152,7 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
       chunk_x=1
       chunk_y=number_of_chunks
     ENDIF
-  !ENDIF
+  ENDIF
 
   delta_x=x_cells/chunk_x
   delta_y=y_cells/chunk_y

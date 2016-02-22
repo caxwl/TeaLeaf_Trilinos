@@ -26,6 +26,7 @@ SUBROUTINE start
   USE tea_module
   USE parse_module
   USE update_halo_module
+  USE definitions_module
 
   IMPLICIT NONE
 
@@ -101,7 +102,8 @@ SUBROUTINE start
                           chunks(c)%field%left,  &
                           chunks(c)%field%right, &
                           chunks(c)%field%bottom,&
-                          chunks(c)%field%top)
+                          chunks(c)%field%top,   &
+                          max_iters, eps)
     ENDDO
   ENDIF
 

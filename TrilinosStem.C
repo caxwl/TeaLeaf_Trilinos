@@ -22,8 +22,9 @@ Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::b;
 Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::x;
 int* TrilinosStem::myGlobalIndices_;
 int TrilinosStem::numLocalElements_;
+int TrilinosStem::MyPID;
 
-
+Teuchos::RCP<Teuchos::ParameterList> TrilinosStem::solverParams;
 Teuchos::RCP<Belos::LinearProblem<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::problem;
 Teuchos::RCP<Belos::SolverManager<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::solver;
 Teuchos::RCP<Ifpack2::Preconditioner<TrilinosStem::Scalar, TrilinosStem::Ordinal, TrilinosStem::Ordinal, TrilinosStem::Node> > TrilinosStem::preconditioner;
@@ -37,14 +38,18 @@ extern "C" {
             int* local_xmin,
             int* local_xmax,
             int* local_ymin,
-            int* local_ymax)
+            int* local_ymax,
+            int* tl_max_iters,
+            double* tl_eps)
     {
         TrilinosStem::initialise(*nx, *ny,
                 *localNx, *localNy,
                 *local_xmin,
                 *local_xmax,
                 *local_ymin,
-                *local_ymax);
+                *local_ymax,
+                *tl_max_iters,
+                *tl_eps);
     }
 
     void trilinos_solve_(
@@ -58,6 +63,7 @@ extern "C" {
             int* global_xmax,
             int* global_ymin,
             int* global_ymax,
+            int* numIters,
             double* rx,
             double* ry,
             double* Kx,
@@ -75,6 +81,7 @@ extern "C" {
                 *global_xmax,
                 *global_ymin,
                 *global_ymax,
+                numIters,
                 *rx,
                 *ry,
                 Kx,
@@ -96,13 +103,20 @@ void TrilinosStem::initialise(
         int local_xmin,
         int local_xmax,
         int local_ymin,
-        int local_ymax)
+        int local_ymax,
+        int tl_max_iters,
+        double tl_eps)
 {
-    std::cout << "[STEM]: Setting up Trilinos/Tpetra...";
+    if(MyPID == 0)
+    {
+        std::cout << "[STEM]: Setting up Trilinos/Tpetra...";
+    }
 
     Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
     Teuchos::RCP<const Teuchos::Comm<int> > comm = platform.getComm();
     Teuchos::RCP<Node> node = platform.getNode();
+
+    MyPID = comm->getRank();
 
     int numGlobalElements = nx * ny;
     numLocalElements_ = localNx * localNy;
@@ -117,18 +131,24 @@ void TrilinosStem::initialise(
 
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            myGlobalIndices_[i] = index;
+            //myGlobalIndices_[i] = index;
+            myGlobalIndices_[i] = ARRAY2D(j,k,1,1,nx)+1;
             i++;
             index++;
         }
         index += rowSpacing;
     }
 
-    std::cerr << "\t[STEM]: creating map...";
+    if(MyPID == 0)
+    {
+        std::cerr << "\t[STEM]: creating map...";
+    }
     Teuchos::ArrayView<const Ordinal> localElementList = Teuchos::ArrayView<const Ordinal>(myGlobalIndices_, numLocalElements_);
     map = Teuchos::rcp(new Map(numGlobalElements, localElementList, 1, comm, node));
-    std::cerr << " DONE. " << std::endl;
-
+    if(MyPID == 0)
+    {
+        std::cerr << " DONE. " << std::endl;
+    }
 
     size_t* numNonZero = new size_t[numLocalElements_];
 
@@ -152,35 +172,37 @@ void TrilinosStem::initialise(
         }
     }
 
-    std::cerr << "\t[STEM]: creating CrsMatrix...";
+    if(MyPID == 0)
+    {
+        std::cerr << "\t[STEM]: creating CrsMatrix...";
+    }
     Teuchos::ArrayRCP<const size_t> nnz = Teuchos::ArrayRCP<const size_t>(numNonZero, 0, numLocalElements_, false);
 
     A = Teuchos::rcp(new Matrix(map, nnz, Tpetra::StaticProfile));
-    std::cerr << " DONE." << std::endl;
+    if(MyPID == 0)
+    {
+        std::cerr << " DONE." << std::endl;
+    }
 
     b = Teuchos::rcp(new Vector(map));
     x = Teuchos::rcp(new Vector(map));
 
     problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
 
-    Belos::SolverFactory<Scalar, MultiVector, Operator> factory;
-
-    Teuchos::RCP<Teuchos::ParameterList> solverParams = Teuchos::parameterList();
-    solverParams->set("Maximum Iterations", 1000);
+    solverParams = Teuchos::parameterList();
+    solverParams->set("Maximum Iterations", tl_max_iters);
      // TODO: Tolerance level causing issues at scale??
-    solverParams->set("Convergence Tolerance", 1.0e-10); 
-    int verbosity = Belos::Errors + Belos::Warnings;
-    verbosity += Belos::TimingDetails + Belos::StatusTestDetails;
-    verbosity += Belos::IterationDetails + Belos::FinalSummary;
-    //verbosity += Belos::Debug;
+    solverParams->set("Convergence Tolerance", tl_eps); 
+    int verbosity  = Belos::Errors;
+    verbosity     += Belos::Warnings;
+    verbosity     += Belos::TimingDetails;
+    verbosity     += Belos::StatusTestDetails;
+    verbosity     += Belos::IterationDetails;
+    verbosity     += Belos::FinalSummary;
+    //verbosity     += Belos::Debug;
     solverParams->set("Verbosity", verbosity);
-    solverParams->set("Output Frequency", 1);
+    //solverParams->set("Output Frequency", 1); // disabling turns off the residual history
     solverParams->set( "Output Style", (int) Belos::Brief);
-
-    solver = factory.create("RCG", solverParams);
-    //solver = factory.create("GMRES", solverParams);
-    //solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
-    std::cout << "DONE." << std::endl;
 }
 
 void TrilinosStem::solve(
@@ -194,12 +216,32 @@ void TrilinosStem::solve(
         int global_xmax,
         int global_ymin,
         int global_ymax,
+        int* numIters,
         double rx,
         double ry,
         double* Kx,
         double* Ky,
         double* u0)
 {
+    Belos::SolverFactory<Scalar, MultiVector, Operator> factory;
+
+    solver = factory.create("RCG", solverParams);
+    //solver = factory.create("GMRES", solverParams);
+    //solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
+
+    if(MyPID == 0)
+    {
+        std::cout << std::endl << "Solver parameters available:" << std::endl;
+        solver->getValidParameters()->print();
+        std::cout << std::endl << "Solver parameters set:" << std::endl;
+        solver->getCurrentParameters()->print();
+    }
+
+    if(MyPID == 0)
+    {
+        std::cout << "DONE." << std::endl;
+    }
+
     Teuchos::RCP<Teuchos::FancyOStream> fos = Teuchos::fancyOStream(Teuchos::rcpFromRef(std::cout));
 
     bool insertValues = false;
@@ -232,9 +274,6 @@ void TrilinosStem::solve(
 
             numEntries = 0;
 
-            if(j == global_xmin) {
-                c2 = 0;
-            }
             if(1 != j) {
                 numEntries++;
                 Values.push_back(c2);
@@ -242,36 +281,25 @@ void TrilinosStem::solve(
             }
 
 
-            if(j == global_xmax) {
-                c3 = 0;
-            }
             if(nx != j) {
                 numEntries++;
                 Values.push_back(c3);
                 Indices.push_back(myGlobalIndices_[i]+1);
             }
 
-            if (k == global_ymin) {
-                c4 = 0;
-            }
             if(1 != k) {
                 numEntries++;
                 Values.push_back(c4);
                 Indices.push_back(myGlobalIndices_[i]-nx);
             }
 
-            if (k == global_ymax) {
-                c5 = 0;
-            }
             if(ny != k) {
                 numEntries++;
                 Values.push_back(c5);
                 Indices.push_back(myGlobalIndices_[i]+nx);
             }
 
-
             double diagonal = (1.0 -c2 -c3 -c4 -c5);
-
 
             if (insertValues) {
                 A->insertGlobalValues(myGlobalIndices_[i],
@@ -303,11 +331,6 @@ void TrilinosStem::solve(
     i = 0;
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
-            double c2 = Kx[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
-            double c3 = Kx[ARRAY2D(j+1,k,local_xmin-2,local_ymin-2,local_nx)];
-            double c4 = Ky[ARRAY2D(j,k,local_xmin-2,local_ymin-2,local_nx)];
-            double c5 = Ky[ARRAY2D(j,k+1,local_xmin-2,local_ymin-2,local_nx)];
-
             double value = u0[ARRAY2D(j,k,local_xmin-2, local_ymin-2, local_nx)];
 
             b->replaceGlobalValue(myGlobalIndices_[i], value);
@@ -350,8 +373,11 @@ void TrilinosStem::solve(
 
     Belos::ReturnType result = solver->solve();
 
-    const int numIters = solver->getNumIters();
-    std::cout << "[STEM]: num_iters = " << numIters << std::endl;
+    *numIters = solver->getNumIters();
+    if(MyPID == 0)
+    {
+        std::cout << "[STEM]: num_iters = " << *numIters << std::endl;
+    }
 
     Teuchos::Array<Scalar> solution(numLocalElements_);
     x->get1dCopy(solution, numLocalElements_);
@@ -363,6 +389,8 @@ void TrilinosStem::solve(
             i++;
         }
     }
+
+    solver = Teuchos::null;
 }
 
 void TrilinosStem::finalise()
@@ -370,7 +398,7 @@ void TrilinosStem::finalise()
     Teuchos::TimeMonitor::summarize();
 
     //Free up the storage - Teuchos::RCP objects just need to have the reference counters decremented to invoke freeing of the object
-    solver = Teuchos::null;
+    //solver = Teuchos::null;
     preconditioner = Teuchos::null;
     problem = Teuchos::null;
     b = Teuchos::null;

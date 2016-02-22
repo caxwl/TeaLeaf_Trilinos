@@ -27,6 +27,8 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
                            x_max,             &
                            y_min,             &
                            y_max,             &
+                           zero_boundary,          &
+                           reflective_boundary,    &
                            celldx,            &
                            celldy,            &
                            volume,            &
@@ -46,7 +48,16 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
    INTEGER         ::            CONDUCTIVITY        = 1 &
                                 ,RECIP_CONDUCTIVITY  = 2
 
+  ! These need to be kept consistent with the data module to avoid use statement
+  INTEGER,PARAMETER       :: CHUNK_LEFT   =1    &
+                            ,CHUNK_RIGHT  =2    &
+                            ,CHUNK_BOTTOM =3    &
+                            ,CHUNK_TOP    =4    &
+                            ,EXTERNAL_FACE=-1
+
   INTEGER(KIND=4):: x_min,x_max,y_min,y_max
+  LOGICAL :: reflective_boundary
+  LOGICAL, DIMENSION(4) :: zero_boundary
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2) :: celldx
   REAL(KIND=8), DIMENSION(y_min-2:y_max+2) :: celldy
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: volume
@@ -59,6 +70,7 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: Ky_tmp
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: Kx
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: Ky
+  REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: w
 
   INTEGER(KIND=4) :: coef
 
@@ -69,32 +81,71 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
 !$OMP PARALLEL
   IF(coef .EQ. RECIP_CONDUCTIVITY) THEN
 !$OMP DO 
-    DO k=y_min-1,y_max+2
-      DO j=x_min-1,x_max+2
-         Kx_tmp(j  ,k  )=1.0_8/density(j  ,k  )
-         Ky_tmp(j  ,k  )=1.0_8/density(j  ,k  )
+    ! use w as temp val
+    DO k=y_min-1,y_max+1
+      DO j=x_min-1,x_max+1
+         w(j  ,k  )=1.0_8/density(j  ,k  )
       ENDDO
     ENDDO
 !$OMP END DO
   ELSE IF(coef .EQ. CONDUCTIVITY) THEN
 !$OMP DO
-    DO k=y_min-1,y_max+2
-      DO j=x_min-1,x_max+2
-         Kx_tmp(j  ,k  )=density(j  ,k  )
-         Ky_tmp(j  ,k  )=density(j  ,k  )
+    DO k=y_min-1,y_max+1
+      DO j=x_min-1,x_max+1
+         w(j  ,k  )=density(j  ,k  )
       ENDDO
     ENDDO
 !$OMP END DO
   ENDIF
 
 !$OMP DO
-  DO k=y_min,y_max+1
-    DO j=x_min,x_max+1
-         Kx(j,k)=(Kx_tmp(j-1,k  )+Kx_tmp(j,k))/(2.0_8*Kx_tmp(j-1,k  )*Kx_tmp(j,k))
-         Ky(j,k)=(Ky_tmp(j  ,k-1)+Ky_tmp(j,k))/(2.0_8*Ky_tmp(j,  k-1)*Ky_tmp(j,k))
-    ENDDO
-  ENDDO
+   DO k=y_min,y_max+1
+     DO j=x_min,x_max+1
+          Kx(j,k)=(w(j-1,k  ) + w(j,k))/(2.0_8*w(j-1,k  )*w(j,k))
+          Ky(j,k)=(w(j  ,k-1) + w(j,k))/(2.0_8*w(j  ,k-1)*w(j,k))
+     ENDDO
+   ENDDO
 !$OMP END DO
+
+! Whether to apply reflective boundary conditions to all external faces
+  IF (reflective_boundary .EQV. .TRUE.) THEN
+    IF (zero_boundary(CHUNK_LEFT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_min-2,x_min
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_RIGHT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_max + 1,x_max+2
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_BOTTOM).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_min
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_TOP).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_max + 1,y_max+2
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+  ENDIF
 
 !$OMP DO 
   DO k=y_min-1, y_max+1

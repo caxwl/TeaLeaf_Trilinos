@@ -39,14 +39,14 @@ rm -f CMakeCache.txt
 #   packages that are to be built.
 #
 
-PREFIX=/home/wpg/TeaLeaf/tealeaf_trilinos/libs/trilinos
+PREFIX=~/Documents/TeaLeaf_Trilinos/libs/trilinos
 
 cmake \
     -D CMAKE_INSTALL_PREFIX:PATH=$PREFIX \
-    -D CMAKE_BUILD_TYPE:STRING=DEBUG \
-    -D CMAKE_CXX_COMPILER:FILEPATH=mpiicpc \
-    -D CMAKE_C_COMPILER:FILEPATH=mpiicc \
-    -D CMAKE_Fortran_COMPILER:FILEPATH=mpiifort  \
+    -D CMAKE_BUILD_TYPE:STRING=RELEASE \
+    -D CMAKE_CXX_COMPILER:FILEPATH=mpicxx \
+    -D CMAKE_C_COMPILER:FILEPATH=mpicc \
+    -D CMAKE_Fortran_COMPILER:FILEPATH=mpif90  \
     -D Trilinos_WARNINGS_AS_ERRORS_FLAGS:STRING="" \
     -D CMAKE_VERBOSE_MAKEFILE:BOOL=TRUE \
     -D Trilinos_ENABLE_ALL_PACKAGES:BOOL=FALSE \
@@ -54,11 +54,13 @@ cmake \
     -D Trilinos_ENABLE_Belos:BOOL=ON \
     -D Trilinos_ENABLE_Ifpack2:BOOL=ON \
     -D Trilinos_ENABLE_ALL_OPTIONAL_PACKAGES:BOOL=ON \
-    -D Trilinos_ENABLE_TESTS:BOOL=ON \
-    -D Trilinos_ENABLE_EXAMPLES:BOOL=ON \
+    -D Trilinos_ENABLE_TESTS:BOOL=OFF \
+    -D Trilinos_ENABLE_EXAMPLES:BOOL=OFF \
     -D TPL_ENABLE_MPI:BOOL=ON \
-    -D BLAS_LIBRARY_DIRS:FILEPATH=/opt/lapack/3.4.2/intel-13.1.1.163/lib \
-    -D LAPACK_LIBRARY_DIRS:FILEPATH=/opt/lapack/3.4.2/intel-13.1.1.163/lib \
+    -D Trilinos_ENABLE_OpenMP:BOOL=ON \
+    -D Trilinos_ENABLE_TEUCHOS_TIME_MONITOR:BOOL=ON \
+    -D BLAS_LIBRARY_DIRS:FILEPATH=/usr/lib/lapack/ \
+    -D LAPACK_LIBRARY_DIRS:FILEPATH=/usr/lib/libblas/ \
     -D CMAKE_CXX_FLAGS:STRING="-DMPICH_IGNORE_CXX_SEEK" \
     $EXTRA_ARGS \
     ../
