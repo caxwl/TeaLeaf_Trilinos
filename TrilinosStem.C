@@ -187,7 +187,7 @@ void TrilinosStem::initialise(
     b = Teuchos::rcp(new Vector(map));
     x = Teuchos::rcp(new Vector(map));
 
-    problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
+    //problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
 
     solverParams = Teuchos::parameterList();
     solverParams->set("Maximum Iterations", tl_max_iters);
@@ -199,7 +199,7 @@ void TrilinosStem::initialise(
     verbosity     += Belos::StatusTestDetails;
     verbosity     += Belos::IterationDetails;
     verbosity     += Belos::FinalSummary;
-    //verbosity     += Belos::Debug;
+    verbosity     += Belos::Debug;
     solverParams->set("Verbosity", verbosity);
     //solverParams->set("Output Frequency", 1); // disabling turns off the residual history
     solverParams->set( "Output Style", (int) Belos::Brief);
@@ -225,9 +225,9 @@ void TrilinosStem::solve(
 {
     Belos::SolverFactory<Scalar, MultiVector, Operator> factory;
 
-    solver = factory.create("RCG", solverParams);
+    //solver = factory.create("RCG", solverParams);
     //solver = factory.create("GMRES", solverParams);
-    //solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
+    solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
 
     if(MyPID == 0)
     {
@@ -348,11 +348,11 @@ void TrilinosStem::solve(
         }
     }
 
+    problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
+
     problem->setOperator(A);
     problem->setLHS(x);
     problem->setRHS(b);
-
-    problem->setProblem();
 
     // v11.x and earlier
     //const Teuchos::RCP<const TrilinosStem::Matrix> const_ptr_to_A = A;
@@ -368,6 +368,8 @@ void TrilinosStem::solve(
     preconditioner->compute ();
 
     problem->setLeftPrec(preconditioner);
+
+    problem->setProblem(); //should be called after setting the preconditioner to avoid errors in the CG solver
 
     solver->setProblem(problem);
 
@@ -391,6 +393,8 @@ void TrilinosStem::solve(
     }
 
     solver = Teuchos::null;
+    preconditioner = Teuchos::null;
+    problem = Teuchos::null;
 }
 
 void TrilinosStem::finalise()
@@ -399,8 +403,8 @@ void TrilinosStem::finalise()
 
     //Free up the storage - Teuchos::RCP objects just need to have the reference counters decremented to invoke freeing of the object
     //solver = Teuchos::null;
-    preconditioner = Teuchos::null;
-    problem = Teuchos::null;
+    //preconditioner = Teuchos::null;
+    //problem = Teuchos::null;
     b = Teuchos::null;
     x = Teuchos::null;
     A = Teuchos::null;
