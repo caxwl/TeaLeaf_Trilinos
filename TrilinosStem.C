@@ -199,7 +199,7 @@ void TrilinosStem::initialise(
     verbosity     += Belos::StatusTestDetails;
     verbosity     += Belos::IterationDetails;
     verbosity     += Belos::FinalSummary;
-    verbosity     += Belos::Debug;
+    //verbosity     += Belos::Debug;
     solverParams->set("Verbosity", verbosity);
     //solverParams->set("Output Frequency", 1); // disabling turns off the residual history
     solverParams->set( "Output Style", (int) Belos::Brief);
@@ -227,7 +227,7 @@ void TrilinosStem::solve(
 
     //solver = factory.create("RCG", solverParams);
     //solver = factory.create("GMRES", solverParams);
-    solver = factory.create("CG", solverParams); // This produces erroneous results - not sure why
+    solver = factory.create("CG", solverParams);
 
     if(MyPID == 0)
     {
@@ -369,7 +369,7 @@ void TrilinosStem::solve(
 
     problem->setLeftPrec(preconditioner);
 
-    problem->setProblem(); //should be called after setting the preconditioner to avoid errors in the CG solver
+    problem->setProblem(); //should be called after setting the preconditioner to avoid errors in the CG solver - see issue #2
 
     solver->setProblem(problem);
 
