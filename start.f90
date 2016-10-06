@@ -103,6 +103,10 @@ SUBROUTINE start
                           chunks(c)%field%right, &
                           chunks(c)%field%bottom,&
                           chunks(c)%field%top,   &
+			  (grid%xmax-grid%xmin)/ &
+			  float(grid%x_cells),   &
+			  (grid%ymax-grid%ymin)/ &
+			  float(grid%y_cells),   &
                           max_iters, eps)
     ENDDO
   ENDIF

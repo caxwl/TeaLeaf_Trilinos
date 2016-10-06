@@ -1,7 +1,8 @@
 ## Trilinos
 
-- Register and download the Trilinos packages from trilinos.sandia.gov, we use version
-  11.4.3, http://trilinos.sandia.gov/download/trilinos-11.4.html
+- Register and download the Trilinos packages from trilinos.sandia.gov, we
+have tested against version 12.6.x and recommend downloading latest release.
+
 - Extract the downloaded file, and create a `build` directory inside the
   newly-created folder.
 - Copy the `do-configure.sh` script from the TeaLeaf repository into the
@@ -17,7 +18,7 @@
 - Run the `do-configure.sh` script, and then `make` and `make install` to build
   and install Trilinos.
 - If you would prefer to use a custom build of Trilinos, note that TeaLeaf
-  depends on the packages: Tpetra, Belos, and Ifpack2.
+  depends on the packages: Tpetra, Belos and MueLu.
 
 ## TeaLeaf
 
@@ -124,3 +125,21 @@ OpenMP, IEEE and AVX this would look like so:-
 make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc IEEE=1 \
 OPTIONS="-xavx" C_OPTIONS="-xavx"
 ```
+
+### Running TeaLeaf with the Trilinos solver
+
+TeaLeaf is controlled through the tea.in, which defines the problem being run.
+Setting the option use_trilinos involves the Trilinos solver.
+
+The Trilinos solver is controlled through the Options.xml file, which controls
+the Krylov method provided by Belos package and the preconditioner provided by
+the MueLu package. Various sample xml files are provided, but for details on the
+syntax of the options in the "Belos Solver" and "MueLu Preconditioner" parameter
+lists you should consult the documentation of the associated Trilinos packages.
+
+The only custom options specific to TeaLeaf are in the "Solver Parameters" parameter
+list. These are:
+<Parameter        name="Belos Solver"                         type="string"   value="CG"/>
+which allows the user to set the Krylov method and:
+<Parameter        name="MueLu Preconditioner"                 type="bool"     value="true"/>
+which enables/disables the MueLu preconditioner.

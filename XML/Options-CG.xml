@@ -1,0 +1,14 @@
+<ParameterList name="TeaLeaf">
+
+<ParameterList name="Solver Parameters">
+  <Parameter        name="Belos Solver"                         type="string"   value="CG"/>
+  <Parameter        name="MueLu Preconditioner"                 type="bool"     value="true"/>
+</ParameterList>
+
+<ParameterList name="Belos Parameters">
+  <Parameter        name="Output Frequency"                     type="int"      value="100"/>
+  <Parameter        name="Convergence Tolerance"                type="double"   value="1.0e-15"/>
+  <Parameter        name="Timer Label"                          type="string"   value="Outer Krylov solver"/>
+</ParameterList>
+
+</ParameterList>

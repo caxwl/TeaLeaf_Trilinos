@@ -1,0 +1,28 @@
+<ParameterList name="TeaLeaf">
+
+<ParameterList name="Solver Parameters">
+  <Parameter        name="Belos Solver"                         type="string"   value="CG"/>
+  <Parameter        name="MueLu Preconditioner"                 type="bool"     value="true"/>
+</ParameterList>
+
+<ParameterList name="Belos Parameters">
+  <Parameter        name="Output Frequency"                     type="int"      value="100"/>
+  <Parameter        name="Convergence Tolerance"                type="double"   value="1.0e-15"/>
+  <Parameter        name="Timer Label"                          type="string"   value="Outer Krylov solver"/>
+</ParameterList>
+
+<ParameterList name="MueLu Parameters">
+  <Parameter        name="verbosity"                            type="string"   value="high"/>
+  <Parameter        name="coarse: type"                         type="string"   value="RELAXATION"/>
+  <ParameterList    name="coarse: params">
+    <Parameter      name="relaxation: type"                     type="string"   value="Symmetric Gauss-Seidel"/>
+    <Parameter      name="relaxation: sweeps"                   type="int"      value="1"/>
+    <Parameter      name="relaxation: damping factor"           type="double"   value="1.0"/>
+  </ParameterList>
+  <!-- ===========  AGGREGATION  =========== -->
+  <Parameter        name="aggregation: type"                    type="string"   value="brick"/>
+  <Parameter        name="aggregation: drop scheme"             type="string"   value="classical"/>
+  <Parameter        name="aggregation: brick x size"            type="int"      value="5"/>
+  <Parameter        name="aggregation: brick y size"            type="int"      value="5"/>
+</ParameterList>
+</ParameterList>

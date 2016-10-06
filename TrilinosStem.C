@@ -3,8 +3,6 @@
 #include "BelosSolverFactory.hpp"
 #include <BelosTpetraAdapter.hpp>
 
-#include "Epetra_Map.h"
-
 // Teuchos
 #include "Teuchos_RCP.hpp"
 #include "Teuchos_ParameterList.hpp"
@@ -14,9 +12,47 @@
 
 #include <Ifpack2_Factory.hpp>
 
+// MueLu main header: include most common header files in one line
+//#include <MueLu.hpp>
+#include <MueLu_TpetraOperator.hpp>
+#include <MueLu_TpetraOperator_def.hpp>
+//#include <MueLu_Hierarchy_decl.hpp>
+//#include <MueLu_Hierarchy_def.hpp>
+//#include <MueLu_TpetraOperator_decl.hpp>
+#include <MueLu_CreateTpetraPreconditioner.hpp>
+//#include <MueLu_Utilities.hpp>
+//#include <MueLu_UseShortNames.hpp>
+
+//#include <Epetra_CrsMatrix.h>
+//#include <ml_MultiLevelPreconditioner.h>
+//#include <Xpetra_EpetraCrsMatrix.hpp>
+
+// Belos
+#include "BelosConfigDefs.hpp"
+#include "BelosLinearProblem.hpp"
+#include "BelosBlockCGSolMgr.hpp"
+#include "BelosBlockGmresSolMgr.hpp"
+#include "BelosXpetraAdapter.hpp" // this header defines Belos::XpetraOp()
+#include "BelosMueLuAdapter.hpp"  // this header defines Belos::MueLuOp()
+#include "BelosOperatorT.hpp"
+
+// Xpetra
+#include <Xpetra_Map.hpp>
+#include <Xpetra_MapFactory.hpp>
+#include <Xpetra_CrsMatrixWrap.hpp>
+#include <Xpetra_VectorFactory.hpp>
+#include <Xpetra_MultiVectorFactory.hpp>
+#include <Xpetra_Parameters.hpp>
+
+#include <Xpetra_Matrix.hpp>
+#include <MueLu_CoordinatesTransferFactory.hpp>
+#include <Xpetra_TpetraMultiVector.hpp>
+
 #define ARRAY2D(i,j,imin,jmin,ni) (i-(imin))+(((j)-(jmin))*(ni))
 
 Teuchos::RCP<const TrilinosStem::Map> TrilinosStem::map;
+Teuchos::RCP<const TrilinosStem::XMap> TrilinosStem::xmap;
+Teuchos::RCP<TrilinosStem::XMultiVector> TrilinosStem::xcoordinates;
 Teuchos::RCP<TrilinosStem::Matrix> TrilinosStem::A;
 Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::b;
 Teuchos::RCP<TrilinosStem::Vector> TrilinosStem::x;
@@ -27,7 +63,7 @@ int TrilinosStem::MyPID;
 Teuchos::RCP<Teuchos::ParameterList> TrilinosStem::solverParams;
 Teuchos::RCP<Belos::LinearProblem<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::problem;
 Teuchos::RCP<Belos::SolverManager<double, TrilinosStem::MultiVector, TrilinosStem::Operator> > TrilinosStem::solver;
-Teuchos::RCP<Ifpack2::Preconditioner<TrilinosStem::Scalar, TrilinosStem::Ordinal, TrilinosStem::Ordinal, TrilinosStem::Node> > TrilinosStem::preconditioner;
+//Teuchos::RCP<Ifpack2::Preconditioner<TrilinosStem::Scalar, TrilinosStem::Ordinal, TrilinosStem::Ordinal, TrilinosStem::Node> > TrilinosStem::preconditioner;
 
 extern "C" {
     void setup_trilinos_(
@@ -39,6 +75,8 @@ extern "C" {
             int* local_xmax,
             int* local_ymin,
             int* local_ymax,
+	    double* dx,
+	    double* dy,
             int* tl_max_iters,
             double* tl_eps)
     {
@@ -48,6 +86,8 @@ extern "C" {
                 *local_xmax,
                 *local_ymin,
                 *local_ymax,
+		*dx,
+		*dy,
                 *tl_max_iters,
                 *tl_eps);
     }
@@ -104,19 +144,19 @@ void TrilinosStem::initialise(
         int local_xmax,
         int local_ymin,
         int local_ymax,
+	double dx,
+	double dy,
         int tl_max_iters,
         double tl_eps)
 {
+    Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
+    Teuchos::RCP<const Teuchos::Comm<int> > comm = platform.getComm();
+    MyPID = comm->getRank();
+
     if(MyPID == 0)
     {
         std::cout << "[STEM]: Setting up Trilinos/Tpetra...";
     }
-
-    Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
-    Teuchos::RCP<const Teuchos::Comm<int> > comm = platform.getComm();
-    Teuchos::RCP<Node> node = platform.getNode();
-
-    MyPID = comm->getRank();
 
     int numGlobalElements = nx * ny;
     numLocalElements_ = localNx * localNy;
@@ -126,25 +166,49 @@ void TrilinosStem::initialise(
 
     int n = 0;
 
-    int index = local_xmin;
-    int i = 0;
+    {
+        int index = local_xmin;
+        int i = 0;
 
-    for(int k = local_ymin; k <= local_ymax; k++) {
-        for(int j = local_xmin; j <= local_xmax; j++) {
-            //myGlobalIndices_[i] = index;
-            myGlobalIndices_[i] = ARRAY2D(j,k,1,1,nx)+1;
-            i++;
-            index++;
-        }
+        for(int k = local_ymin; k <= local_ymax; k++) {
+            for(int j = local_xmin; j <= local_xmax; j++) {
+                //myGlobalIndices_[i] = index;
+                myGlobalIndices_[i] = ARRAY2D(j,k,1,1,nx)+1;
+                i++;
+                index++;
+            }
         index += rowSpacing;
-    }
+        }
+    }	
 
     if(MyPID == 0)
     {
         std::cerr << "\t[STEM]: creating map...";
     }
     Teuchos::ArrayView<const Ordinal> localElementList = Teuchos::ArrayView<const Ordinal>(myGlobalIndices_, numLocalElements_);
+    Teuchos::RCP<Node> node = platform.getNode();
     map = Teuchos::rcp(new Map(numGlobalElements, localElementList, 1, comm, node));
+
+    //Store co-ordinates of the unknowns so we can use brick agglomeration
+    //need to use xmap rather tha map as MueLu needs an Xpetra::MultiVector object
+
+    xmap = Xpetra::MapFactory<Ordinal,Ordinal,Node>::Build(Xpetra::UnderlyingLib::UseTpetra,numGlobalElements, localElementList, 1, comm, node);
+    xcoordinates = Xpetra::MultiVectorFactory<Scalar,Ordinal,Ordinal,Node>::Build(xmap,2);
+    Teuchos::ArrayRCP<Teuchos::ArrayRCP<Scalar> > Coord(2);
+    Coord[0] = xcoordinates->getDataNonConst(0);
+    Coord[1] = xcoordinates->getDataNonConst(1);
+    {
+        int i = 0;
+
+        for(int k = local_ymin; k <= local_ymax; k++) {
+            for(int j = local_xmin; j <= local_xmax; j++) {
+	        Coord[0][i] = (Teuchos::as<Scalar>(j)-1.5)*dx;
+	        Coord[1][i] = (Teuchos::as<Scalar>(k)-1.5)*dy;
+                i++;
+            }
+        }
+    }
+
     if(MyPID == 0)
     {
         std::cerr << " DONE. " << std::endl;
@@ -152,7 +216,7 @@ void TrilinosStem::initialise(
 
     size_t* numNonZero = new size_t[numLocalElements_];
 
-    i = 0;
+    int i = 0;
 
     for(int k = local_ymin; k <= local_ymax; k++) {
         for(int j = local_xmin; j <= local_xmax; j++) {
@@ -187,12 +251,15 @@ void TrilinosStem::initialise(
     b = Teuchos::rcp(new Vector(map));
     x = Teuchos::rcp(new Vector(map));
 
-    //problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
-
     solverParams = Teuchos::parameterList();
-    solverParams->set("Maximum Iterations", tl_max_iters);
-     // TODO: Tolerance level causing issues at scale??
-    solverParams->set("Convergence Tolerance", tl_eps); 
+
+    // Belos+MueLu parameters - create sublists
+    Teuchos::ParameterList& iterationParams      = (*solverParams).sublist("Belos Parameters",false,"Belos sublist");
+    Teuchos::ParameterList& preconditionerParams = (*solverParams).sublist("MueLu Parameters",false,"MueLu sublist");
+
+    // Hardwired defaults
+    iterationParams.set("Maximum Iterations", tl_max_iters);
+    iterationParams.set("Convergence Tolerance", tl_eps); 
     int verbosity  = Belos::Errors;
     verbosity     += Belos::Warnings;
     verbosity     += Belos::TimingDetails;
@@ -200,9 +267,14 @@ void TrilinosStem::initialise(
     verbosity     += Belos::IterationDetails;
     verbosity     += Belos::FinalSummary;
     //verbosity     += Belos::Debug;
-    solverParams->set("Verbosity", verbosity);
-    //solverParams->set("Output Frequency", 1); // disabling turns off the residual history
-    solverParams->set( "Output Style", (int) Belos::Brief);
+    iterationParams.set("Verbosity", verbosity);
+    //iterationParams.set("Verbosity", Belos::Errors);
+    //iterationParams.set("Output Frequency", 1); // disabling turns off the residual history
+    iterationParams.set("Output Style", (int) Belos::Brief);
+
+    // Override with parameters set in the XML file (should test it exists)
+    std::string OptionsFile = "Options.xml";
+    Teuchos::updateParametersFromXmlFileAndBroadcast(OptionsFile, Teuchos::inoutArg(*solverParams),*comm,true);
 }
 
 void TrilinosStem::solve(
@@ -225,24 +297,46 @@ void TrilinosStem::solve(
 {
     Belos::SolverFactory<Scalar, MultiVector, Operator> factory;
 
-    //solver = factory.create("RCG", solverParams);
-    //solver = factory.create("GMRES", solverParams);
-    solver = factory.create("CG", solverParams);
+    // Belos+MueLu parameters - retrieve sublists
+    Teuchos::ParameterList& iterationParams      = (*solverParams).sublist("Belos Parameters" ,false,"Belos sublist");
+    Teuchos::ParameterList& preconditionerParams = (*solverParams).sublist("MueLu Parameters" ,false,"MueLu sublist");
+    Teuchos::ParameterList& tealeafParams        = (*solverParams).sublist("Solver Parameters",false,"Solver sublist");
 
-    if(MyPID == 0)
+    //set defaults to CG with no preconditioner
+    std::string belos_name     = "CG";
+    bool preconditioner_active = false;
+    if(tealeafParams.isParameter("Belos Solver"))
     {
-        std::cout << std::endl << "Solver parameters available:" << std::endl;
-        solver->getValidParameters()->print();
-        std::cout << std::endl << "Solver parameters set:" << std::endl;
-        solver->getCurrentParameters()->print();
+        belos_name            = Teuchos::getParameter<std::string>(tealeafParams,"Belos Solver");
+    }
+    if(tealeafParams.isParameter("MueLu Preconditioner"))
+    {
+        preconditioner_active = Teuchos::getParameter<bool>(tealeafParams,"MueLu Preconditioner");
     }
 
-    if(MyPID == 0)
-    {
-        std::cout << "DONE." << std::endl;
-    }
+    //solver = factory.create("RCG", belosParams);
+    //solver = factory.create("GMRES", belosParams);
+    solver = factory.create(belos_name, Teuchos::rcpFromRef(iterationParams));
 
     Teuchos::RCP<Teuchos::FancyOStream> fos = Teuchos::fancyOStream(Teuchos::rcpFromRef(std::cout));
+
+    if(MyPID == 0)
+    {
+        std::cout << std::endl << "Solver parameters set:" << std::endl;
+        tealeafParams.print();
+        std::cout << std::endl << "Belos solver description:" << std::endl;
+        (*solver).describe(*fos,Teuchos::VERB_EXTREME);
+        std::cout << std::endl << "Belos solver parameters available:" << std::endl;
+        solver->getValidParameters()->print();
+        std::cout << std::endl << "Belos solver parameters set:" << std::endl;
+        solver->getCurrentParameters()->print();
+	if(preconditioner_active)
+	{
+            std::cout << std::endl << "MueLu preconditioner parameters set:" << std::endl << std::endl;
+            preconditionerParams.print();
+	}
+	std::cout << std::endl;
+    }
 
     bool insertValues = false;
 
@@ -348,26 +442,41 @@ void TrilinosStem::solve(
         }
     }
 
-    problem = Teuchos::rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(A, x, b));
+    typedef Xpetra::Matrix<Scalar, Ordinal, Ordinal, Node> Xpetra_Matrix;
+    typedef Xpetra::CrsMatrix<Scalar, Ordinal, Ordinal, Node> Xpetra_CrsMatrix;
+    typedef Xpetra::TpetraCrsMatrix<Scalar, Ordinal, Ordinal, Node> Xpetra_TpetraCrsMatrix;
+    typedef Xpetra::CrsMatrixWrap<Scalar, Ordinal, Ordinal, Node> Xpetra_CrsMatrixWrap;
+    Teuchos::RCP<Xpetra_CrsMatrix> xcrsA = rcp(new Xpetra_TpetraCrsMatrix(A));
+    Teuchos::RCP<Xpetra_Matrix> xopA = rcp(new Xpetra_CrsMatrixWrap(xcrsA));
+    Teuchos::RCP<Operator> belosOp = Teuchos::rcp(new Belos::XpetraOp<Scalar,Ordinal,Ordinal,Node>(xopA)); // Turns a Xpetra::Operator object into a Belos operator
 
-    problem->setOperator(A);
+    problem = rcp(new Belos::LinearProblem<Scalar, MultiVector, Operator>(belosOp, x, b));
+    problem->setOperator(belosOp);
     problem->setLHS(x);
     problem->setRHS(b);
 
-    // v11.x and earlier
-    //const Teuchos::RCP<const TrilinosStem::Matrix> const_ptr_to_A = A;
-    //preconditioner = Teuchos::rcp(new Ifpack2::Diagonal<const TrilinosStem::Matrix>(const_ptr_to_A));
+    if(preconditioner_active)
+    {
+        typedef Belos::MueLuOp<Scalar,Ordinal,Ordinal,Node> Belos_MueLuOperator;
 
-    // v12.x onwards
-    typedef Ifpack2::Preconditioner<> prec_type;
-    Teuchos::RCP<prec_type> preconditioner;
-    typedef Tpetra::RowMatrix<> row_matrix_type;
-    preconditioner = Ifpack2::Factory::create<row_matrix_type> ("DIAGONAL", A);
-    preconditioner->initialize ();
+        Teuchos::RCP<MueLu::HierarchyManager<Scalar,Ordinal,Ordinal,Node>>
+            mueLuFactory = rcp(new MueLu::ParameterListInterpreter<Scalar,Ordinal,Ordinal,Node>(preconditionerParams));
 
-    preconditioner->compute ();
+        Teuchos::RCP<MueLu::Hierarchy<Scalar,Ordinal,Ordinal,Node>> hierarchy;
 
-    problem->setLeftPrec(preconditioner);
+        hierarchy = mueLuFactory->CreateHierarchy();   
+        hierarchy->GetLevel(0)->Set("A"          , xopA        );
+        hierarchy->GetLevel(0)->Set("Coordinates", xcoordinates);
+
+        mueLuFactory->SetupHierarchy(*hierarchy);
+        //hierarchy->Setup(); // This does the set-up without applying the preconditionerParams settings
+        hierarchy->IsPreconditioner(true);
+        //Teuchos::ParameterList validParams;
+        //validParams = mueLuFactory.GetValidParameterList();
+        Teuchos::RCP<Belos_MueLuOperator> preconditioner = rcp(new Belos_MueLuOperator(hierarchy));
+
+        problem->setLeftPrec(preconditioner); //commenting out will disable the MueLu preconditioner 
+    }
 
     problem->setProblem(); //should be called after setting the preconditioner to avoid errors in the CG solver - see issue #2
 
@@ -393,7 +502,7 @@ void TrilinosStem::solve(
     }
 
     solver = Teuchos::null;
-    preconditioner = Teuchos::null;
+    //preconditioner = Teuchos::null;
     problem = Teuchos::null;
 }
 
@@ -409,6 +518,8 @@ void TrilinosStem::finalise()
     x = Teuchos::null;
     A = Teuchos::null;
     map = Teuchos::null;
+    xmap = Teuchos::null;
+    xcoordinates = Teuchos::null;
     delete myGlobalIndices_;
 }
 

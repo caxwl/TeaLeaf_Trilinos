@@ -13,7 +13,7 @@ EXTRA_ARGS=$@
 # Deleting the CMakeCache.txt file before invoking CMake will insure
 # that CMake learns about any build options you may have changed.
 #
-rm -f CMakeCache.txt
+rm -rf CMakeCache.txt CMakeFiles
 
 #
 # A sampling of CMake build options.
@@ -38,6 +38,19 @@ rm -f CMakeCache.txt
 # Trilinos_ENABLE_EXAMPLES: If ON, build the examples for all
 #   packages that are to be built.
 #
+# Added -g flag to enable debugging/profiling
+#
+# Optional MKL BLAS / LAPACK setting   
+#    -D TPL_ENABLE_MKL:BOOL=ON \
+#    -D MKL_LIBRARY_DIRS:STRING="/opt/intel/Compiler/16.0/current/mkl/lib/intel64" \
+#    -D BLAS_LIBRARY_DIRS:STRING="/opt/intel/Compiler/16.0/current/mkl/lib/intel64;/opt/intel/Compiler/16.0/current/compiler/lib/intel64;/usr/lib64" \
+#    -D BLAS_LIBRARY_NAMES:STRING="mkl_intel_lp64; mkl_intel_thread; mkl_core; iomp5; pthread" \
+#    -D LAPACK_LIBRARY_DIRS:STRING="/opt/intel/Compiler/16.0/current/mkl/lib/intel64;/opt/intel/Compiler/16.0/current/compiler/lib/intel64;/usr/lib64" \
+#    -D LAPACK_LIBRARY_NAMES:STRING="mkl_intel_lp64; mkl_intel_thread; mkl_core; iomp5; pthread" \
+#   
+# export PATH=/opt/gcc/gcc-5.2.0/bin/:$PATH
+# export LD_LIBRARY_PATH=/opt/gcc/gcc-5.2.0/lib64:$LD_LIBRARY_PATH
+
 
 PREFIX=~/Documents/TeaLeaf_Trilinos/libs/trilinos
 
@@ -50,9 +63,14 @@ cmake \
     -D Trilinos_WARNINGS_AS_ERRORS_FLAGS:STRING="" \
     -D CMAKE_VERBOSE_MAKEFILE:BOOL=TRUE \
     -D Trilinos_ENABLE_ALL_PACKAGES:BOOL=FALSE \
+    -D Trilinos_ENABLE_Stratimikos:BOOL=ON \
     -D Trilinos_ENABLE_Tpetra:BOOL=ON \
     -D Trilinos_ENABLE_Belos:BOOL=ON \
     -D Trilinos_ENABLE_Ifpack2:BOOL=ON \
+    -D Trilinos_ENABLE_MueLu:BOOL=ON \
+    -D Trilinos_ENABLE_ML:BOOL=ON \
+    -D Trilinos_ENABLE_Epetra:BOOL=ON \
+    -D Trilinos_ENABLE_Xpetra:BOOL=ON \
     -D Trilinos_ENABLE_ALL_OPTIONAL_PACKAGES:BOOL=ON \
     -D Trilinos_ENABLE_TESTS:BOOL=OFF \
     -D Trilinos_ENABLE_EXAMPLES:BOOL=OFF \
@@ -61,7 +79,9 @@ cmake \
     -D Trilinos_ENABLE_TEUCHOS_TIME_MONITOR:BOOL=ON \
     -D BLAS_LIBRARY_DIRS:FILEPATH=/usr/lib/lapack/ \
     -D LAPACK_LIBRARY_DIRS:FILEPATH=/usr/lib/libblas/ \
-    -D CMAKE_CXX_FLAGS:STRING="-DMPICH_IGNORE_CXX_SEEK" \
+    -D Trilinos_ENABLE_EXPLICIT_INSTANTIATION:BOOL=ON \
+    -D BUILD_SHARED_LIBS:BOOL=OFF \
+    -D CMAKE_CXX_FLAGS:STRING="-DMPICH_IGNORE_CXX_SEEK -g" \
     $EXTRA_ARGS \
     ../
 
