@@ -139,7 +139,11 @@ lists you should consult the documentation of the associated Trilinos packages.
 
 The only custom options specific to TeaLeaf are in the "Solver Parameters" parameter
 list. These are:
+```
 <Parameter        name="Belos Solver"                         type="string"   value="CG"/>
+```
 which allows the user to set the Krylov method and:
+```
 <Parameter        name="MueLu Preconditioner"                 type="bool"     value="true"/>
+```
 which enables/disables the MueLu preconditioner.
