@@ -332,7 +332,10 @@ void TrilinosStem::solve(
         solver->getCurrentParameters()->print();
 	if(preconditioner_active)
 	{
-            std::cout << std::endl << "MueLu preconditioner parameters set:" << std::endl << std::endl;
+            std::cout << std::endl << "MueLu preconditioner parameters available:" << std::endl;
+            Teuchos::RCP< const Teuchos::ParameterList > validParams = MueLu::MasterList::List();
+            validParams->print();
+            std::cout << std::endl << "MueLu preconditioner parameters set:" << std::endl;
             preconditionerParams.print();
 	}
 	std::cout << std::endl;
