@@ -523,6 +523,7 @@ void TrilinosStem::finalise()
     map = Teuchos::null;
     xmap = Teuchos::null;
     xcoordinates = Teuchos::null;
+    solverParams = Teuchos::null;
     delete myGlobalIndices_;
 }
 
