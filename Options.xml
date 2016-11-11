@@ -2,7 +2,7 @@
 
 <ParameterList name="Solver Parameters">
   <Parameter        name="Belos Solver"                         type="string"   value="CG"/>
-  <Parameter        name="MueLu Preconditioner"                 type="bool"     value="true"/>
+  <Parameter        name="MueLu Preconditioner"                 type="bool"     value="false"/>
 </ParameterList>
 
 <ParameterList name="Belos Parameters">

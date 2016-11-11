@@ -73,22 +73,11 @@
 # Trilinos stuff
 TRILINOS_DIR=libs/trilinos
 include $(TRILINOS_DIR)/include/Makefile.export.Trilinos
-TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS)
-TRILINOS_LIBRARIES=$(TRILINOS_LIBRARY_DIRS) -lkokkos         \
-				            -ltpetra         \
-				            -lteuchoscomm    \
-				            -lteuchoscore    \
-				            -lteuchosnumerics \
-				            -lteuchosparameterlist  \
-				            -lteuchosremainder  \
-					    -ltriutils \
-				            -lkokkosdisttsqr \
-				            -lkokkoslinalg   \
-				            -lkokkosnodeapi  \
-				            -lkokkosnodetsqr \
-				            -ltpi            \
-				            -lbelos          \
-				            -lbelostpetra    #-L/lapack/lib -llapack -lblas
+TRILINOS_INCLUDE_DIRS=$(Trilinos_INCLUDE_DIRS) $(Trilinos_TPL_INCLUDE_DIRS)
+TRILINOS_LIBRARY_DIRS=$(Trilinos_LIBRARY_DIRS) $(Trilinos_TPL_LIBRARY_DIRS)
+TRILINOS_LIBRARIES=$(Trilinos_LIBRARIES) $(Trilinos_TPL_LIBRARIES)
+TRILINOS_LINK_FLAGS=$(Trilinos_EXTRA_LD_FLAGS)
+
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
@@ -151,16 +140,16 @@ endif
 REQ_LIB=-lstdc++
 
 FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS)
-CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) $(Trilinos_INCLUDE_DIRS) -c
+CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) $(TRILINOS_INCLUDE_DIRS) -c
 
 ifdef NO_TRILINOS
 endif
 
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
-CXX_MPI_COMPILER=mpicxx -DMPICH_IGNORE_CXX_SEEK
+CXX_MPI_COMPILER=mpicxx
 
-tea_leaf: trilinos-stem c_lover *.f90 Makefile
+tea_leaf: TrilinosStem.o timer_c.o *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
 	data.f90			\
 	definitions.f90			\
@@ -197,15 +186,14 @@ tea_leaf: trilinos-stem c_lover *.f90 Makefile
 	timer_c.o                       \
 	$(REQ_LIB)			\
 	TrilinosStem.o                  \
-	$(TRILINOS_LIBRARIES) 		\
+	$(TRILINOS_LINK_FLAGS) $(TRILINOS_INCLUDE_DIRS) $(TRILINOS_LIBRARY_DIRS) $(TRILINOS_LIBRARIES)	\
 	-o tea_leaf; echo $(MESSAGE)
 
-c_lover: *.c Makefile
-	$(C_MPI_COMPILER) $(CFLAGS)     \
-	timer_c.c
+timer_c.o: timer_c.c
+	$(C_MPI_COMPILER) $(CFLAGS) timer_c.c
 
-trilinos-stem: *.C
-	$(CXX_MPI_COMPILER) $(CFLAGS) TrilinosStem.C
+TrilinosStem.o: TrilinosStem.C TrilinosStem.h
+	$(CXX_MPI_COMPILER) -std=c++11 $(CFLAGS) TrilinosStem.C
 
 clean:
 	rm -f *.o *.mod *genmod* *.lst *.cub *.ptx tea_leaf
