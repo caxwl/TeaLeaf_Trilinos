@@ -50,9 +50,14 @@ rm -rf CMakeCache.txt CMakeFiles
 #   
 # export PATH=/opt/gcc/gcc-5.2.0/bin/:$PATH
 # export LD_LIBRARY_PATH=/opt/gcc/gcc-5.2.0/lib64:$LD_LIBRARY_PATH
+# Note LAPACK 3.6+ is not supported yet
 
 
-PREFIX=~/Documents/TeaLeaf_Trilinos/libs/trilinos
+PREFIX=~/TeaLeaf_Trilinos/libs/trilinos
+export MPICH_CXX=`readlink -f ../packages/kokkos/config/nvcc_wrapper`
+export NVCC_WRAPPER_DEFAULT_COMPILER=g++
+export CUDA_LAUNCH_BLOCKING=1
+
 
 cmake \
     -D CMAKE_INSTALL_PREFIX:PATH=$PREFIX \
@@ -77,13 +82,20 @@ cmake \
     -D TPL_ENABLE_MPI:BOOL=ON \
     -D Trilinos_ENABLE_OpenMP:BOOL=ON \
     -D Trilinos_ENABLE_TEUCHOS_TIME_MONITOR:BOOL=ON \
-    -D BLAS_LIBRARY_DIRS:FILEPATH=/usr/lib/lapack/ \
-    -D LAPACK_LIBRARY_DIRS:FILEPATH=/usr/lib/libblas/ \
+    -D BLAS_LIBRARY_DIRS:FILEPATH=~/libs/blas/3.6.0-gcc4.8.5 \
+    -D LAPACK_LIBRARY_DIRS:FILEPATH=~/libs/lapack/3.5.0-gcc4.8.5 \
     -D Trilinos_ENABLE_EXPLICIT_INSTANTIATION:BOOL=ON \
     -D BUILD_SHARED_LIBS:BOOL=OFF \
-    -D CMAKE_CXX_FLAGS:STRING="-DMPICH_IGNORE_CXX_SEEK -g" \
+    -D CMAKE_CXX_FLAGS="-DMPICH_IGNORE_CXX_SEEK -g -lineinfo -Xcudafe \
+        --diag_suppress=conversion_function_not_usable -Xcudafe \
+        --diag_suppress=cc_clobber_ignored -Xcudafe \
+        --diag_suppress=code_is_unreachable" \
+    -D TPL_ENABLE_MPI=ON \
+    -D TPL_ENABLE_CUDA=ON \
+    -D Kokkos_ENABLE_Cuda=ON \
+    -D Kokkos_ENABLE_Cuda_UVM=ON \
     $EXTRA_ARGS \
     ../
 
-make
-make install
+make -j32
+make install -j32
