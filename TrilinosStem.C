@@ -37,13 +37,6 @@
 #include "BelosOperatorT.hpp"
 
 // Xpetra
-#include <Xpetra_Map.hpp>
-#include <Xpetra_MapFactory.hpp>
-#include <Xpetra_CrsMatrixWrap.hpp>
-#include <Xpetra_VectorFactory.hpp>
-#include <Xpetra_MultiVectorFactory.hpp>
-#include <Xpetra_Parameters.hpp>
-
 #include <Xpetra_Matrix.hpp>
 #include <MueLu_CoordinatesTransferFactory.hpp>
 #include <Xpetra_TpetraMultiVector.hpp>
